@@ -4,7 +4,15 @@ import os.path, json
 
 conn = Connection()
 
+limit = 200
+count = 0
+
 for item in conn.walk_category(PD_EXPIRATION_CATEGORY, member_types=["file"]):
+    if count >= limit:
+        break
+    
+    count += 1
+    
     print(item["title"])
 
     localpath = os.path.join("sets", "wikimedia")
