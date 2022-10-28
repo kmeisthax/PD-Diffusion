@@ -63,6 +63,17 @@ class Connection(object):
 
         return urllib.request.urlopen(url)
 
+#ALL Public Domain images.
+#Includes things that are only PD in some countries.
+#Guaranteed to be at least safe for US use as Wikimedia is US-based.
 PD_CATEGORY = "Category:Public domain"
 
+#PD through expiration only.
+#Some countries do not recognize public domain dedication and thus
+#limiting ourselves to this category is useful.
 PD_EXPIRATION_CATEGORY = "Category:Public_domain_due_to_copyright_expiration"
+
+#Uncopyrightable photograph of PD art.
+#In the US, you cannot recopyright PD art by photographing it.
+#Other countries are less merciful.
+PD_ART_CATEGORY = "Category:PD Art"
