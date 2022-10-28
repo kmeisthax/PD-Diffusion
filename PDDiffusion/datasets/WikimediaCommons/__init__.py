@@ -1,4 +1,4 @@
-import requests
+import requests, urllib.request
 
 BASE_API_ENDPOINT = "https://commons.wikimedia.org/w/api.php"
 
@@ -54,6 +54,14 @@ class Connection(object):
     
     def page_terms(self, titles=[]):
         return self.get(action="query", prop="pageterms", titles="|".join(titles))
+    
+    def urlopen(self, url):
+        if not isinstance(url, urllib.request.Request):
+            url = urllib.request.Request(url)
+        
+        url.add_header("User-Agent", self.ua)
+
+        return urllib.request.urlopen(url)
 
 PD_CATEGORY = "Category:Public domain"
 

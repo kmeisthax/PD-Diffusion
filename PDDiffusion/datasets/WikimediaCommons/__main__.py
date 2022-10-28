@@ -15,7 +15,7 @@ for item in conn.walk_category(PD_EXPIRATION_CATEGORY, member_types=["file"]):
     
     image_info = conn.image_info(titles=[item["title"]], iiprop=["url"])
     for image in image_info["query"]["pages"][str(item["pageid"])]["imageinfo"]:
-        with urlopen(image["url"]) as source:
+        with conn.urlopen(image["url"]) as source:
             with open(localfile, "wb") as sink:
                 sink.write(source.read())
     
