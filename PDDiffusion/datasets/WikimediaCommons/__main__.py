@@ -1,4 +1,4 @@
-from PDDiffusion.datasets.WikimediaCommons import Connection, PD_EXPIRATION_CATEGORY
+from PDDiffusion.datasets.WikimediaCommons import Connection, PD_ART_CATEGORY, LOCAL_STORAGE
 from urllib.request import urlopen
 import os.path, json
 
@@ -15,11 +15,10 @@ for item in conn.walk_category(PD_EXPIRATION_CATEGORY, member_types=["file"]):
     
     print(item["title"])
 
-    localpath = os.path.join("sets", "wikimedia")
-    localfile = os.path.join(localpath, item["title"].removeprefix("File:"))
+    localfile = os.path.join(LOCAL_STORAGE, item["title"].removeprefix("File:"))
 
-    if not os.path.exists(localpath):
-        os.makedirs(localpath)
+    if not os.path.exists(LOCAL_STORAGE):
+        os.makedirs(LOCAL_STORAGE)
     
     image_info = conn.image_info(titles=[item["title"]], iiprop=["url"])
     for image in image_info["query"]["pages"][str(item["pageid"])]["imageinfo"]:

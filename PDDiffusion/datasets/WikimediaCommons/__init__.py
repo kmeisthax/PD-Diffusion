@@ -1,5 +1,7 @@
-import requests, urllib.request
+import requests, urllib.request, glob, os.path, itertools, json, PIL
+from PIL import Image
 
+LOCAL_STORAGE = os.path.join("sets", "wikimedia")
 BASE_API_ENDPOINT = "https://commons.wikimedia.org/w/api.php"
 
 DEFAULT_UA = "PD-Diffusion/0.0"
@@ -77,3 +79,34 @@ PD_EXPIRATION_CATEGORY = "Category:Public_domain_due_to_copyright_expiration"
 #In the US, you cannot recopyright PD art by photographing it.
 #Other countries are less merciful.
 PD_ART_CATEGORY = "Category:PD Art"
+
+def local_wikimedia():
+    """Load in training data previously downloaded by running this module's main.
+    
+    Intended to be used as a Huggingface dataset via:
+    
+    ```from datasets import Dataset
+    from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
+    
+    data = Dataset.from_generator(local_wikimedia)```"""
+    
+    for file in itertools.chain(glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpg")), glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpeg")), glob.iglob(os.path.join(LOCAL_STORAGE, "*.png"))):
+        if count > limit:
+            return
+        
+        count += 1
+
+        label = os.path.splitext(os.path.basename(file))[0]
+        if os.path.exists(file + ".json"):
+            with open(file + ".json", "r") as metadata:
+                #TODO: Should we yield the same image twice with different data?
+                try:
+                    for extra in json.load(metadata)["label"]:
+                        label = label + ", " + extra
+                except:
+                    continue
+        
+        try:
+            yield {"image": Image.open(os.path.abspath(file)), "image_file_path": os.path.abspath(file), "text": label}
+        except PIL.UnidentifiedImageError:
+            continue
