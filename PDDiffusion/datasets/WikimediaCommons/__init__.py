@@ -80,7 +80,7 @@ PD_EXPIRATION_CATEGORY = "Category:Public_domain_due_to_copyright_expiration"
 #Other countries are less merciful.
 PD_ART_CATEGORY = "Category:PD Art"
 
-def local_wikimedia():
+def local_wikimedia(limit = None):
     """Load in training data previously downloaded by running this module's main.
     
     Intended to be used as a Huggingface dataset via:
@@ -90,8 +90,10 @@ def local_wikimedia():
     
     data = Dataset.from_generator(local_wikimedia)```"""
     
+    count = 0
+    
     for file in itertools.chain(glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpg")), glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpeg")), glob.iglob(os.path.join(LOCAL_STORAGE, "*.png"))):
-        if count > limit:
+        if limit is not None and count > limit:
             return
         
         count += 1
