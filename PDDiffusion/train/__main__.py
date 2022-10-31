@@ -11,6 +11,7 @@ from diffusers.optimization import get_cosine_schedule_with_warmup
 from diffusers.hub_utils import init_git_repo, push_to_hub
 from tqdm.auto import tqdm
 import torch.nn.functional as F
+from PIL import Image
 
 config = SampleConfig()
 config.dataset_name = "pd-diffusion-wikimedia"
