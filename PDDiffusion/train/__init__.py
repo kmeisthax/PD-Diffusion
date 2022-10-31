@@ -9,8 +9,8 @@ class SampleConfig:
     gradient_accumulation_steps = 1
     learning_rate = 1e-4
     lr_warmup_steps = 500
-    save_image_epochs = 10
-    save_model_epochs = 30
+    save_image_epochs = 999 # Set lower than the total number of epochs to get sample images every n epochs
+    save_model_epochs = 1
     mixed_precision = 'no'  # `no` for float32, `fp16` for automatic mixed precision
     output_dir = 'pd-diffusion-wikimedia'  # the model namy locally and on the HF Hub
 
