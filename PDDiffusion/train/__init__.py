@@ -12,7 +12,7 @@ class SampleConfig:
     save_image_epochs = 999 # Set lower than the total number of epochs to get sample images every n epochs
     save_model_epochs = 1
     mixed_precision = 'no'  # `no` for float32, `fp16` for automatic mixed precision
-    output_dir = 'pd-diffusion-wikimedia'  # the model namy locally and on the HF Hub
+    output_dir = 'pd-diffusion'  # the model namy locally and on the HF Hub
 
     push_to_hub = False  # whether to upload the saved model to the HF Hub
     hub_private_repo = False  
