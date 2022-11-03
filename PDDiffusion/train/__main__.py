@@ -1,7 +1,7 @@
 from PDDiffusion.train import SampleConfig
 from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
 
-import os, torch, math
+import os.path, torch, math
 
 from datasets import Dataset
 from torchvision import transforms
@@ -35,6 +35,8 @@ dataset.set_transform(transform)
 
 train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
 
+os.chdir("output")
+
 model = UNet2DModel(
     sample_size=config.image_size,  # the target image resolution
     in_channels=3,  # the number of input channels, 3 for RGB images
@@ -58,6 +60,9 @@ model = UNet2DModel(
         "UpBlock2D"  
       ),
 )
+
+if os.path.exists(os.path.join(config.output_dir, "unet")):
+    model.from_pretrained(os.path.join(config.output_dir, "unet"))
 
 noise_scheduler = DDPMScheduler(num_train_timesteps=1000)
 

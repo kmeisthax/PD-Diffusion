@@ -34,9 +34,9 @@ TODO: Parameters for adding your e-mail address to public Mediawiki requests
 
 ```
 source env/bin/activate
-cd output && python -m PDDiffusion.train
+python -m PDDiffusion.train
 ```
 
-This pulls from any datasets you downloaded.
+This pulls from any datasets you downloaded. Trained models will be stored in the output directory.
 
-NOTE: The first time you run the training command, you must do so *outside* the output directory. Huggingface Datasets will cache the result and afterwords running inside the output directory will work fine. If you run outside the directory it'll fill your `git status` with garbage.
+The model is set to save every training epoch; and reload from disk if the training process is restarted.
