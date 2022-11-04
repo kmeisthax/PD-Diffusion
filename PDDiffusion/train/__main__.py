@@ -1,7 +1,7 @@
 from PDDiffusion.train import SampleConfig
 from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
 
-import os.path, torch, math
+import os.path, torch, math, json
 
 from datasets import Dataset
 from torchvision import transforms
@@ -61,8 +61,15 @@ model = UNet2DModel(
       ),
 )
 
+progress = {"last_epoch": 0}
+
 if os.path.exists(os.path.join(config.output_dir, "unet")):
-    model.from_pretrained(os.path.join(config.output_dir, "unet"))
+    model = UNet2DModel.from_pretrained(os.path.join(config.output_dir, "unet"))
+
+    with open(os.path.join(config.output_dir, "progress.json"), "r") as progress_file:
+        progress = json.load(progress_file)
+    
+    print("Restarting after epoch {}".format(progress["last_epoch"]))
 
 noise_scheduler = DDPMScheduler(num_train_timesteps=1000)
 
@@ -120,7 +127,8 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
     global_step = 0
 
     # Now you train the model
-    for epoch in range(config.num_epochs):
+    last_epoch = progress["last_epoch"] + 1 + config.num_epochs
+    for epoch in range(progress["last_epoch"] + 1, last_epoch):
         progress_bar = tqdm(total=len(train_dataloader), disable=not accelerator.is_local_main_process)
         progress_bar.set_description(f"Epoch {epoch}")
 
@@ -158,13 +166,17 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
         if accelerator.is_main_process:
             pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
 
-            if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
+            if (epoch + 1) % config.save_image_epochs == 0 or epoch == last_epoch - 1:
                 evaluate(config, epoch, pipeline)
 
-            if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
+            if (epoch + 1) % config.save_model_epochs == 0 or epoch == last_epoch - 1:
                 if config.push_to_hub:
                     push_to_hub(config, pipeline, repo, commit_message=f"Epoch {epoch}", blocking=True)
                 else:
                     pipeline.save_pretrained(config.output_dir)
+
+                    with open(os.path.join(config.output_dir, "progress.json"), "w") as progress_file:
+                        progress["last_epoch"] = epoch
+                        json.dump(progress, progress_file)
 
 train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler)

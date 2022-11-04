@@ -9,7 +9,15 @@ class SampleConfig:
     gradient_accumulation_steps = 1
     learning_rate = 1e-4
     lr_warmup_steps = 500
-    save_image_epochs = 999 # Set lower than the total number of epochs to get sample images every n epochs
+
+    #Generate an image every n epochs.
+    #Image generation is processor-intensive, so this number should be relatively high.
+    #Images will also be generated on the last epoch in the current run, no matter what.
+    save_image_epochs = 999
+
+    #Save the model every n epochs.
+    #This is cheap, so I recommend doing it every epoch.
+    #Training will resume from a saved model.
     save_model_epochs = 1
     mixed_precision = 'no'  # `no` for float32, `fp16` for automatic mixed precision
     output_dir = 'pd-diffusion'  # the model namy locally and on the HF Hub
