@@ -80,6 +80,11 @@ PD_EXPIRATION_CATEGORY = "Category:Public_domain_due_to_copyright_expiration"
 #Other countries are less merciful.
 PD_ART_CATEGORY = "Category:PD Art"
 
+#Uncopyrightable photograph of art that has expired copyright in the US.
+#Almost certainly the most safe category, and likely to be a high quality
+#training source as it is art.
+PD_ART_US_EXPIRATION_CATEGORY = "Category:PD-Art (PD-US-expired)"
+
 def local_wikimedia(limit = None):
     """Load in training data previously downloaded by running this module's main.
     

@@ -1,4 +1,4 @@
-from PDDiffusion.datasets.WikimediaCommons import Connection, PD_ART_CATEGORY, LOCAL_STORAGE
+from PDDiffusion.datasets.WikimediaCommons import Connection, PD_ART_US_EXPIRATION_CATEGORY, LOCAL_STORAGE
 from urllib.request import urlopen
 import os.path, json
 
