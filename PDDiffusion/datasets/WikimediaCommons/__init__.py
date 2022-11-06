@@ -97,7 +97,13 @@ def local_wikimedia(limit = None):
     
     count = 0
     
-    for file in itertools.chain(glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpg")), glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpeg")), glob.iglob(os.path.join(LOCAL_STORAGE, "*.png"))):
+    for file in itertools.chain(
+            glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpg")),
+            glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpeg")),
+            glob.iglob(os.path.join(LOCAL_STORAGE, "*.png")),
+            glob.iglob(os.path.join(LOCAL_STORAGE, "*.tif")),
+            glob.iglob(os.path.join(LOCAL_STORAGE, "*.tiff"))
+        ):
         if limit is not None and count > limit:
             return
         
