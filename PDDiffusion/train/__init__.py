@@ -19,7 +19,7 @@ class SampleConfig:
     #Generate an image every n epochs.
     #Image generation is processor-intensive, so this number should be relatively high.
     #Images will also be generated on the last epoch in the current run, no matter what.
-    save_image_epochs = 1
+    save_image_epochs = 999
 
     #Save the model every n epochs.
     #This is cheap, so I recommend doing it every epoch.
