@@ -10,12 +10,13 @@ count = 0
 for item in conn.walk_category(PD_ART_US_EXPIRATION_CATEGORY, member_types=["file"]):
     if count >= limit:
         break
-    
+
+    sanitized_image_name = item["title"].removeprefix("File:").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
+    localfile = os.path.join(LOCAL_STORAGE, sanitized_image_name)
+
     count += 1
     
     print(item["title"])
-
-    localfile = os.path.join(LOCAL_STORAGE, item["title"].removeprefix("File:"))
 
     if not os.path.exists(LOCAL_STORAGE):
         os.makedirs(LOCAL_STORAGE)
