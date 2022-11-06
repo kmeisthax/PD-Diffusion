@@ -1,75 +1,26 @@
-from PDDiffusion.train import SampleConfig
-from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
+from PDDiffusion.train import SampleConfig, load_dataset, load_model_and_progress
+from PDDiffusion.test import evaluate
 
 import os.path, torch, math, json
 
-from datasets import Dataset
-from torchvision import transforms
 from accelerate import Accelerator
-from diffusers import UNet2DModel, DDPMScheduler, DDPMPipeline
+from diffusers import DDPMScheduler, DDPMPipeline
 from diffusers.optimization import get_cosine_schedule_with_warmup
 from diffusers.hub_utils import init_git_repo, push_to_hub
 from tqdm.auto import tqdm
 import torch.nn.functional as F
-from PIL import Image
 
 config = SampleConfig()
 config.dataset_name = "pd-diffusion-wikimedia"
 
-dataset = Dataset.from_generator(local_wikimedia)
-
-preprocess = transforms.Compose(
-    [
-        transforms.Resize((config.image_size, config.image_size)),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize([0.5], [0.5]),
-    ]
-)
-
-def transform(examples):
-    images = [preprocess(image.convert("RGB")) for image in examples["image"]]
-    return {"images": images}
-
-dataset.set_transform(transform)
+dataset = load_dataset(config)
 
 train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
 
 os.chdir("output")
 
-model = UNet2DModel(
-    sample_size=config.image_size,  # the target image resolution
-    in_channels=3,  # the number of input channels, 3 for RGB images
-    out_channels=3,  # the number of output channels
-    layers_per_block=2,  # how many ResNet layers to use per UNet block
-    block_out_channels=(128, 128, 256, 256, 512, 512),  # the number of output channes for each UNet block
-    down_block_types=( 
-        "DownBlock2D",  # a regular ResNet downsampling block
-        "DownBlock2D", 
-        "DownBlock2D", 
-        "DownBlock2D", 
-        "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention
-        "DownBlock2D",
-    ), 
-    up_block_types=(
-        "UpBlock2D",  # a regular ResNet upsampling block
-        "AttnUpBlock2D",  # a ResNet upsampling block with spatial self-attention
-        "UpBlock2D", 
-        "UpBlock2D", 
-        "UpBlock2D", 
-        "UpBlock2D"  
-      ),
-)
-
-progress = {"last_epoch": 0}
-
-if os.path.exists(os.path.join(config.output_dir, "unet")):
-    model = UNet2DModel.from_pretrained(os.path.join(config.output_dir, "unet"))
-
-    with open(os.path.join(config.output_dir, "progress.json"), "r") as progress_file:
-        progress = json.load(progress_file)
-    
-    print("Restarting after epoch {}".format(progress["last_epoch"]))
+(model, progress) = load_model_and_progress(config)
+print("Restarting after epoch {}".format(progress["last_epoch"]))
 
 noise_scheduler = DDPMScheduler(num_train_timesteps=1000)
 
@@ -80,29 +31,6 @@ lr_scheduler = get_cosine_schedule_with_warmup(
     num_warmup_steps=config.lr_warmup_steps,
     num_training_steps=(len(train_dataloader) * config.num_epochs),
 )
-
-def make_grid(images, rows, cols):
-    w, h = images[0].size
-    grid = Image.new('RGB', size=(cols*w, rows*h))
-    for i, image in enumerate(images):
-        grid.paste(image, box=(i%cols*w, i//cols*h))
-    return grid
-
-def evaluate(config, epoch, pipeline):
-    # Sample some images from random noise (this is the backward diffusion process).
-    # The default pipeline output type is `List[PIL.Image]`
-    images = pipeline(
-        batch_size = config.eval_batch_size, 
-        generator=torch.manual_seed(config.seed),
-    ).images
-
-    # Make a grid out of the images
-    image_grid = make_grid(images, rows=4, cols=4)
-
-    # Save the images
-    test_dir = os.path.join(config.output_dir, "samples")
-    os.makedirs(test_dir, exist_ok=True)
-    image_grid.save(f"{test_dir}/{epoch:04d}.png")
 
 def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler):
     # Initialize accelerator and tensorboard logging
