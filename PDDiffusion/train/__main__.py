@@ -17,6 +17,9 @@ dataset = load_dataset(config)
 
 train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
 
+if not os.path.exists("output"):
+    os.makedirs("output")
+
 os.chdir("output")
 
 (model, progress) = load_model_and_progress(config)
