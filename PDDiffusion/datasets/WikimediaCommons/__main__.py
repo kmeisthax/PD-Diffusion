@@ -7,7 +7,7 @@ conn = Connection()
 limit = 200
 count = 0
 
-for item in conn.walk_category(PD_EXPIRATION_CATEGORY, member_types=["file"]):
+for item in conn.walk_category(PD_ART_US_EXPIRATION_CATEGORY, member_types=["file"]):
     if count >= limit:
         break
     
