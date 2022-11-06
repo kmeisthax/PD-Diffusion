@@ -29,10 +29,15 @@ for item in conn.walk_category(PD_ART_US_EXPIRATION_CATEGORY, member_types=["fil
         with conn.urlopen(image["url"]) as source:
             with open(localfile, "wb") as sink:
                 sink.write(source.read())
-    
+
+    metadata = {}
+    metadata["title"] = item["title"].removeprefix("File:").removesuffix(".jpg").removesuffix(".jpeg").removesuffix(".png").removesuffix(".tif").removesuffix(".tiff")
+
     page_terms = conn.page_terms(titles=[item["title"]])
     if "terms" in page_terms["query"]["pages"][str(item["pageid"])]:
-        with open(localfile + '.json', 'w') as sink:
-            sink.write(json.dumps(page_terms["query"]["pages"][str(item["pageid"])]["terms"]))
+        metadata["terms"] = page_terms["query"]["pages"][str(item["pageid"])]["terms"]
+    
+    with open(localfile + '.json', 'w') as sink:
+        sink.write(json.dumps(metadata))
     
     #TODO: Retain category information when crawling.

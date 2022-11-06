@@ -109,15 +109,22 @@ def local_wikimedia(limit = None):
         
         count += 1
 
-        label = os.path.splitext(os.path.basename(file))[0]
+        label = None
         if os.path.exists(file + ".json"):
             with open(file + ".json", "r") as metadata:
+                metadata_obj = json.load(metadata)
+                label = metadata_obj["title"]
+
                 #TODO: Should we yield the same image twice with different data?
                 try:
-                    for extra in json.load(metadata)["label"]:
+                    for extra in metadata_obj["terms"]["label"]:
                         label = label + ", " + extra
                 except:
                     continue
+        
+        if label is None:
+            print ("Warning: Image {} is unlabeled, skipping".format(file))
+            continue
         
         try:
             yield {"image": Image.open(os.path.abspath(file)), "image_file_path": os.path.abspath(file), "text": label}
