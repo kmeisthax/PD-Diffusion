@@ -14,6 +14,9 @@ for item in conn.walk_category(PD_ART_US_EXPIRATION_CATEGORY, member_types=["fil
     sanitized_image_name = item["title"].removeprefix("File:").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
     localfile = os.path.join(LOCAL_STORAGE, sanitized_image_name)
 
+    if os.path.exists(localfile): #Don't rescan old images.
+        continue
+    
     count += 1
     
     print(item["title"])
