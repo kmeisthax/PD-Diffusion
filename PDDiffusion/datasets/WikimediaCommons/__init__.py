@@ -57,6 +57,13 @@ class Connection(object):
     def page_terms(self, titles=[]):
         return self.get(action="query", prop="pageterms", titles="|".join(titles))
     
+    def categories(self, titles=[]):
+        """Get the categories for a given page."""
+        return self.get(action="query", prop="categories", titles="|".join(titles), cllimit="max", clshow="hidden")
+    
+    def parse_tree(self, title):
+        return self.get(action="parse", prop="parsetree", page=title)
+    
     def urlopen(self, url):
         if not isinstance(url, urllib.request.Request):
             url = urllib.request.Request(url)
