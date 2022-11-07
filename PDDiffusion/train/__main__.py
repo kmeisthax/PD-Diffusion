@@ -63,8 +63,7 @@ def train_loop(config):
         global_step = 0
 
         # Now you train the model
-        last_epoch = progress["last_epoch"] + 1 + config.num_epochs
-        for epoch in range(progress["last_epoch"] + 1, last_epoch):
+        for epoch in range(progress["last_epoch"] + 1, config.num_epochs):
             progress_bar = tqdm(total=len(train_dataloader), disable=not accelerator.is_local_main_process)
             progress_bar.set_description(f"Epoch {epoch}")
 
@@ -102,10 +101,10 @@ def train_loop(config):
             if accelerator.is_main_process:
                 pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
 
-                if (epoch + 1) % config.save_image_epochs == 0 or epoch == last_epoch - 1:
+                if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
                     evaluate(config, epoch, pipeline)
 
-                if (epoch + 1) % config.save_model_epochs == 0 or epoch == last_epoch - 1:
+                if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
                     if config.push_to_hub:
                         push_to_hub(config, pipeline, repo, commit_message=f"Epoch {epoch}", blocking=True)
                     else:
