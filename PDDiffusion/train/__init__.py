@@ -33,10 +33,19 @@ class SampleConfig:
     overwrite_output_dir = True  # overwrite the old model when re-running the notebook
     seed = 0
 
+    ddpm_train_timesteps = 1000
+    ddpm_beta_schedule = "linear"
+
+    adam_beta1 = 0.95
+    adam_beta2 = 0.999
+    adam_weight_decay = 1e-6
+    adam_epsilon = 1e-08
+
 def preprocessor(config):
     return transforms.Compose(
         [
-            transforms.Resize((config.image_size, config.image_size)),
+            transforms.Resize(config.image_size, interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.CenterCrop(config.image_size),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize([0.5], [0.5]),

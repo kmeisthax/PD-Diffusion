@@ -43,7 +43,13 @@ def train_loop(config):
         (model, progress) = load_model_and_progress(config)
         print("Restarting after epoch {}".format(progress["last_epoch"]))
 
-        optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
+        optimizer = torch.optim.AdamW(
+            model.parameters(),
+            lr=config.learning_rate,
+            betas=(config.adam_beta1, config.adam_beta2),
+            weight_decay=config.adam_weight_decay,
+            eps=config.adam_epsilon
+        )
 
         lr_scheduler = get_cosine_schedule_with_warmup(
             optimizer=optimizer,
@@ -51,7 +57,7 @@ def train_loop(config):
             num_training_steps=(len(train_dataloader) * config.num_epochs),
         )
 
-        noise_scheduler = DDPMScheduler(num_train_timesteps=1000)
+        noise_scheduler = DDPMScheduler(num_train_timesteps=config.ddpm_train_timesteps, beta_schedule=config.ddpm_beta_schedule)
         
         # Prepare everything
         # There is no specific order to remember, you just need to unpack the 
