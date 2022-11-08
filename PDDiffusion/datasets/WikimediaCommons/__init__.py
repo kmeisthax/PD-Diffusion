@@ -134,10 +134,18 @@ def local_wikimedia(limit = None):
             continue
         
         try:
-            yield {"image": Image.open(os.path.abspath(file)), "image_file_path": os.path.abspath(file), "text": label}
+            image = {"image": Image.open(os.path.abspath(file)), "image_file_path": os.path.abspath(file), "text": label}
+
+            #Forcibly load every image to make sure it's loadable from disk.
+            Image.open(os.path.abspath(file)).load()
+
+            yield image
         except PIL.UnidentifiedImageError:
             print ("Warning: Image {} is an unknown format".format(file))
             continue
         except PIL.Image.DecompressionBombError:
             print ("Warning: Image {} is too large for PIL".format(file))
+            continue
+        except OSError as e:
+            print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
             continue
