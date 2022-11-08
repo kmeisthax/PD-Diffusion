@@ -87,6 +87,10 @@ PD_EXPIRATION_CATEGORY = "Category:Public_domain_due_to_copyright_expiration"
 #Other countries are less merciful.
 PD_ART_CATEGORY = "Category:PD Art"
 
+#Uncopyrightable photograph of PD art that's 100 years old or older.
+#Should exclude all the Italian photographs that are questionably PD in the US.
+PD_ART_CATEGORY_OLD100 = "Category:PD-Art (PD-old-100)"
+
 #Uncopyrightable photograph of art that has expired copyright in the US.
 #Almost certainly the most safe category, and likely to be a high quality
 #training source as it is art.
