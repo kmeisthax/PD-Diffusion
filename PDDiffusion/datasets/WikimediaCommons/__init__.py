@@ -127,7 +127,7 @@ def local_wikimedia(limit = None):
                     for extra in metadata_obj["terms"]["label"]:
                         label = label + ", " + extra
                 except:
-                    continue
+                    pass
         
         if label is None:
             print ("Warning: Image {} is unlabeled, skipping".format(file))
