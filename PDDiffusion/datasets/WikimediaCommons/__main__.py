@@ -18,6 +18,10 @@ for item in conn.walk_category(PD_ART_US_EXPIRATION_CATEGORY, member_types=["fil
     localfile = os.path.join(LOCAL_STORAGE, sanitized_image_name)
     metadatafile = localfile + '.json'
 
+    if os.path.exists(localfile + ".banned") or os.path.exists(localfile + ".bannedmetadata"):
+        #Skip downloaded files that were banned from the training set due to decoding errors
+        continue
+
     file_already_exists = os.path.exists(localfile)
     metadata_already_exists = os.path.exists(metadatafile)
     if metadata_already_exists:
