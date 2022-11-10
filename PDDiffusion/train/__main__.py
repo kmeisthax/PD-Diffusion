@@ -41,7 +41,6 @@ def train_loop(config):
         train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
         (model, progress) = load_model_and_progress(config)
-        print("Restarting after epoch {}".format(progress["last_epoch"]))
 
         optimizer = torch.optim.AdamW(
             model.parameters(),
@@ -50,11 +49,20 @@ def train_loop(config):
             weight_decay=config.adam_weight_decay,
             eps=config.adam_epsilon
         )
-
+        
+        for group in optimizer.param_groups:
+            group.setdefault('initial_lr', group['lr'])
+        
+        last_step = -1
+        if progress["last_epoch"] != -1:
+            print("Restarting after epoch {}".format(progress["last_epoch"]))
+            last_step = len(train_dataloader) * progress["last_epoch"]
+        
         lr_scheduler = get_cosine_schedule_with_warmup(
             optimizer=optimizer,
             num_warmup_steps=config.lr_warmup_steps,
             num_training_steps=(len(train_dataloader) * config.num_epochs),
+            last_epoch=last_step #Since we step per batch, not per epoch
         )
 
         noise_scheduler = DDPMScheduler(num_train_timesteps=config.ddpm_train_timesteps, beta_schedule=config.ddpm_beta_schedule)

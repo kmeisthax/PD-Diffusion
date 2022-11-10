@@ -93,7 +93,7 @@ def load_model_and_progress(config):
         ),
     )
 
-    progress = {"last_epoch": 0}
+    progress = {"last_epoch": -1}
 
     if os.path.exists(os.path.join(config.output_dir, "unet")):
         model = UNet2DModel.from_pretrained(os.path.join(config.output_dir, "unet"))
