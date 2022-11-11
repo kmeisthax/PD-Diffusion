@@ -117,7 +117,7 @@ def image_is_valid(file):
         print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
         return False
 
-def local_wikimedia(limit = None):
+def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted images", "Category:Cropped images", "Category:Extracted drawings"]):
     """Load in training data previously downloaded by running this module's main.
     
     Intended to be used as a Huggingface dataset via:
@@ -146,6 +146,17 @@ def local_wikimedia(limit = None):
             with open(file + ".json", "r") as metadata:
                 metadata_obj = json.load(metadata)
                 label = metadata_obj["title"]
+
+                is_prohibited = False
+
+                for category in metadata_obj["categories"]:
+                    if category["title"] in prohibited_categories:
+                        print("{} is prohibited".format(category["title"]))
+                        is_prohibited = True
+                        break
+                
+                if is_prohibited:
+                    continue
 
                 #TODO: Should we yield the same image twice with different data?
                 try:
