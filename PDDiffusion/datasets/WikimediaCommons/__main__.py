@@ -11,7 +11,7 @@ count = 0
 if not os.path.exists(LOCAL_STORAGE):
     os.makedirs(LOCAL_STORAGE)
 
-for item in conn.walk_category(PD_ART_US_EXPIRATION_CATEGORY, member_types=["file"]):
+for item in conn.walk_category(PD_ART_CATEGORY_OLD100, member_types=["file"]):
     if count >= limit:
         break
 
