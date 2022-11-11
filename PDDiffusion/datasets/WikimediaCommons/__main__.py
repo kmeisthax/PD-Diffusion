@@ -41,10 +41,12 @@ for item in conn.walk_category(PD_ART_US_EXPIRATION_CATEGORY, member_types=["fil
     print(item["title"])
     
     image_info = conn.image_info(titles=[item["title"]], iiprop=["url", "size"])["query"]["pages"][str(item["pageid"])]["imageinfo"]
+    image_is_banned = False
     for image in image_info:
         if image["size"] > Image.MAX_IMAGE_PIXELS:
             #Don't even download the file, just mark the metadata as banned
             metadatafile = localfile + '.bannedmetadata'
+            image_is_banned = True
             break
 
         if not file_already_exists:
@@ -54,6 +56,7 @@ for item in conn.walk_category(PD_ART_US_EXPIRATION_CATEGORY, member_types=["fil
             
             if not image_is_valid(localfile):
                 os.rename(localfile, localfile + ".banned")
+                image_is_banned = True
     
     if not metadata_already_exists:
         metadata = {}
@@ -76,4 +79,5 @@ for item in conn.walk_category(PD_ART_US_EXPIRATION_CATEGORY, member_types=["fil
         with open(metadatafile, 'w') as sink:
             sink.write(json.dumps(metadata))
     
-    count += 1
+    if not image_is_banned:
+        count += 1

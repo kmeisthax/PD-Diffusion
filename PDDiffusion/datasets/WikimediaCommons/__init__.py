@@ -104,6 +104,16 @@ def image_is_valid(file):
         test_image.load()
 
         return True
+    except PIL.UnidentifiedImageError:
+        print ("Warning: Image {} is an unknown format".format(file))
+        test_image.close()
+
+        return False
+    except PIL.Image.DecompressionBombError:
+        print ("Warning: Image {} is too large for PIL".format(file))
+        test_image.close()
+
+        return False
     except OSError as e:
         print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
         test_image.close()
@@ -151,18 +161,11 @@ def local_wikimedia(limit = None):
             print ("Warning: Image {} is unlabeled, skipping".format(file))
             continue
         
-        try:
-            if not image_is_valid(file):
-                #Rename the file and its metadata for later inspection
-                os.rename(file, file + '.banned')
-                os.rename(file + '.json', file + '.bannedmetadata')
-                
-                continue
-            
-            yield {"image": Image.open(os.path.abspath(file)), "image_file_path": os.path.abspath(file), "text": label}
-        except PIL.UnidentifiedImageError:
-            print ("Warning: Image {} is an unknown format".format(file))
+        if not image_is_valid(file):
+            #Rename the file and its metadata for later inspection
+            os.rename(file, file + '.banned')
+            os.rename(file + '.json', file + '.bannedmetadata')
+
             continue
-        except PIL.Image.DecompressionBombError:
-            print ("Warning: Image {} is too large for PIL".format(file))
-            continue
+        
+        yield {"image": Image.open(os.path.abspath(file)), "image_file_path": os.path.abspath(file), "text": label}
