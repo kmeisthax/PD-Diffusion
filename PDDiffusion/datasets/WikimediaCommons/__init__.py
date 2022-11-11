@@ -99,25 +99,22 @@ PD_ART_US_EXPIRATION_CATEGORY = "Category:PD-Art (PD-US-expired)"
 def image_is_valid(file):
     """Test if an image file on disk loads with PIL."""
 
-    test_image = Image.open(os.path.abspath(file))
     try:
-        test_image.load()
+        test_image = Image.open(os.path.abspath(file))
+        try:
+            test_image.load()
 
-        return True
-    except PIL.UnidentifiedImageError:
-        print ("Warning: Image {} is an unknown format".format(file))
-        test_image.close()
+            return True
+        except PIL.UnidentifiedImageError:
+            print ("Warning: Image {} is an unknown format".format(file))
+            test_image.close()
 
-        return False
+            return False
     except PIL.Image.DecompressionBombError:
         print ("Warning: Image {} is too large for PIL".format(file))
-        test_image.close()
-
         return False
     except OSError as e:
         print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
-        test_image.close()
-
         return False
 
 def local_wikimedia(limit = None):
