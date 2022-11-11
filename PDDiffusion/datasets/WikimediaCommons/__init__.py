@@ -96,6 +96,20 @@ PD_ART_CATEGORY_OLD100 = "Category:PD-Art (PD-old-100)"
 #training source as it is art.
 PD_ART_US_EXPIRATION_CATEGORY = "Category:PD-Art (PD-US-expired)"
 
+def image_is_valid(file):
+    """Test if an image file on disk loads with PIL."""
+
+    test_image = Image.open(os.path.abspath(file))
+    try:
+        test_image.load()
+
+        return True
+    except OSError as e:
+        print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
+        test_image.close()
+
+        return False
+
 def local_wikimedia(limit = None):
     """Load in training data previously downloaded by running this module's main.
     
@@ -138,18 +152,11 @@ def local_wikimedia(limit = None):
             continue
         
         try:
-            #Forcibly load every image to make sure it's loadable from disk.
-            test_image = Image.open(os.path.abspath(file))
-            try:
-                test_image.load()
-            except OSError as e:
-                print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
-                test_image.close()
-
+            if not image_is_valid(file):
                 #Rename the file and its metadata for later inspection
                 os.rename(file, file + '.banned')
                 os.rename(file + '.json', file + '.bannedmetadata')
-
+                
                 continue
             
             yield {"image": Image.open(os.path.abspath(file)), "image_file_path": os.path.abspath(file), "text": label}

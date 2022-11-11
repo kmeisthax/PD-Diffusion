@@ -1,6 +1,7 @@
-from PDDiffusion.datasets.WikimediaCommons import Connection, PD_ART_US_EXPIRATION_CATEGORY, LOCAL_STORAGE
+from PDDiffusion.datasets.WikimediaCommons import Connection, PD_ART_CATEGORY_OLD100, LOCAL_STORAGE, image_is_valid
 from urllib.request import urlopen
 import os.path, json
+from PIL import Image
 
 conn = Connection()
 
@@ -19,7 +20,9 @@ for item in conn.walk_category(PD_ART_US_EXPIRATION_CATEGORY, member_types=["fil
     metadatafile = localfile + '.json'
 
     if os.path.exists(localfile + ".banned") or os.path.exists(localfile + ".bannedmetadata"):
-        #Skip downloaded files that were banned from the training set due to decoding errors
+        #Skip downloaded files that were banned from the training set.
+        #Images can be banned either because they were too large to decode,
+        #or because the file could not be decoded in PIL.
         continue
 
     file_already_exists = os.path.exists(localfile)
@@ -37,12 +40,20 @@ for item in conn.walk_category(PD_ART_US_EXPIRATION_CATEGORY, member_types=["fil
     
     print(item["title"])
     
-    if not file_already_exists:
-        image_info = conn.image_info(titles=[item["title"]], iiprop=["url"])
-        for image in image_info["query"]["pages"][str(item["pageid"])]["imageinfo"]:
+    image_info = conn.image_info(titles=[item["title"]], iiprop=["url", "size"])["query"]["pages"][str(item["pageid"])]["imageinfo"]
+    for image in image_info:
+        if image["size"] > Image.MAX_IMAGE_PIXELS:
+            #Don't even download the file, just mark the metadata as banned
+            metadatafile = localfile + '.bannedmetadata'
+            break
+
+        if not file_already_exists:
             with conn.urlopen(image["url"]) as source:
                 with open(localfile, "wb") as sink:
                     sink.write(source.read())
+            
+            if not image_is_valid(localfile):
+                os.rename(localfile, localfile + ".banned")
     
     if not metadata_already_exists:
         metadata = {}
@@ -59,6 +70,8 @@ for item in conn.walk_category(PD_ART_US_EXPIRATION_CATEGORY, member_types=["fil
         page_text = conn.parse_tree(item["title"])
         if "parsetree" in page_text["parse"]:
             metadata["parsetree"] = page_text["parse"]["parsetree"]
+        
+        metadata["imageinfo"] = image_info
         
         with open(metadatafile, 'w') as sink:
             sink.write(json.dumps(metadata))
