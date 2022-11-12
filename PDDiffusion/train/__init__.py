@@ -11,38 +11,36 @@ from PIL import Image
 
 @dataclass
 class TrainingOptions:
-    image_size: int = 128  # the generated image resolution
-    train_batch_size: int = 16
-    eval_batch_size: int = 16  # how many images to sample during evaluation
-    num_epochs: int = 50
-    gradient_accumulation_steps: int = 1
-    learning_rate: float = 1e-4
-    lr_warmup_steps: int = 500
+    image_size: int = field(default = 128, metadata={"args": ["--image_size"], "help": "The image resolution to train the model at."})
+    train_batch_size: int = field(default = 16, metadata={"args": ["--train_batch_size"], "help": "How many images to train per step. Will be reduced automatically if this exceeds the memory size of your GPU."})
+    eval_batch_size: int = field(default = 16, metadata={"args": ["--eval_batch_size"], "help": "How many output image samples to generate on a save-image epoch"})
+    num_epochs: int = field(default = 50, metadata={"args": ["--num_epochs"], "help": "How many epochs to train for. You can only generate sample images or checkpoint the model at an epoch boundary."})
+    gradient_accumulation_steps: int = field(default=1, metadata={"args": ["--gradient_accumulation_steps"]})
+    learning_rate: float = field(default=1e-4, metadata={"args": ["--learning_rate"]})
+    lr_warmup_steps: int = field(default=500, metadata={"args": ["--lr_warmup_steps"]})
 
     #Generate an image every n epochs.
     #Image generation is processor-intensive, so this number should be relatively high.
     #Images will also be generated on the last epoch in the current run, no matter what.
-    save_image_epochs: int = 999
+    save_image_epochs: int = field(default=999, metadata={"args": ["--save_image_epochs"], "help": "How many epochs to wait in between sample image generation."})
 
     #Save the model every n epochs.
     #This is cheap, so I recommend doing it every epoch.
     #Training will resume from a saved model.
-    save_model_epochs: int = 1
-    mixed_precision: str = field(default = 'no', metadata={"choices": ["no", "fp16", "bf16"]})
-    output_dir: str = 'pd-diffusion'  # the model namy locally and on the HF Hub
+    save_model_epochs: int = field(default=1, metadata={"args": ["--save_model_epochs"], "help": "How many epochs to wait in between saving model checkpoints."})
+    mixed_precision: str = field(default = 'no', metadata={"args": ["--mixed_precision"], "choices": ["no", "fp16", "bf16"], "help": "What mixed-precision mode to use, if any."})
+    output_dir: str = field(default='pd-diffusion', metadata={"args": ["output_dir"], "help": "The directory name to save the model to. Will also be used as the name of the model for Huggingface upload, if selected."})
 
-    push_to_hub: bool = False  # whether to upload the saved model to the HF Hub
-    hub_private_repo: bool = False  
-    overwrite_output_dir: bool = True  # overwrite the old model when re-running the notebook
-    seed: int = 0
+    push_to_hub: bool = field(default=False, metadata={"args": ["--push_to_hub"], "help": "Automatically upload trained model weights to Huggingface's model hub"})
+    seed: int = field(default=0, metadata={"args": ["--seed"], "help": "The seed to use when generating sample images."})
 
-    ddpm_train_timesteps: int = 1000
-    ddpm_beta_schedule: str = "linear"
+    ddpm_train_timesteps: int = field(default=1000, metadata={"args": ["--ddpm_train_timesteps"]})
+    ddpm_beta_schedule: str = field(default="linear", metadata={"args": ["--ddpm_beta_schedule"]})
 
-    adam_beta1:float = 0.95
-    adam_beta2:float = 0.999
-    adam_weight_decay:float = 1e-6
-    adam_epsilon:float = 1e-08
+    adam_beta1:float = field(default=0.95, metadata={"args": ["--adam_beta1"]})
+    adam_beta2:float = field(default=0.999, metadata={"args": ["--adam_beta2"]})
+    adam_weight_decay:float = field(default=1e-6, metadata={"args": ["--adam_weight_decay"]})
+    adam_epsilon:float = field(default=1e-08, metadata={"args": ["--adam_epsilon"]})
 
 def preprocessor(config):
     return transforms.Compose(
