@@ -8,6 +8,7 @@ attrs==22.1.0
 cachetools==5.2.0
 certifi==2022.9.24
 charset-normalizer==2.1.1
+colorama==0.4.6
 datasets==2.6.1
 diffusers==0.6.0
 dill==0.3.5.1
@@ -50,6 +51,7 @@ tensorboard==2.10.1
 tensorboard-data-server==0.6.1
 tensorboard-plugin-wit==1.8.1
 torch==1.12.1
+torchvision==0.14.0
 tqdm==4.64.1
 typing_extensions==4.4.0
 urllib3==1.26.12
