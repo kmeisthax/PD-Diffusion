@@ -23,7 +23,7 @@ Narrowing ourselves down to *just* art generators, we identify several ethical h
 
 We propose only training on data that is copyright-free or has a reputable signal of consent. Given the technical constraints, we also have to ensure that the training set images do not have an attribution requirement, as the model is likely to regurgitate trained images and we can't tell when it does. As labels themselves are unlikely to be regurgitated by the AI, we can tolerate attribution or copyleft clauses on their licenses as they would only apply to the model weights themselves.
 
-We are not the only one to insist on this. Debian's recently-adopted [ML policy](https://salsa.debian.org/deeplearning-team/ml-policy/-/blob/master/ML-Policy.pdf) calls freely-available models without a clear copyright pedigree "toxic candy". There is also an active lawsuit against Microsoft and OpenAI over GitHub Copilot, and many, many Japanese artists angry about Mimic. If we continue to take instead of ask, the law will change to make that taking theft.
+We are not the only one to insist on this. Debian's unofficial [ML policy](https://salsa.debian.org/deeplearning-team/ml-policy/-/blob/master/ML-Policy.pdf) calls freely-available models without a clear copyright pedigree "toxic candy". There is also an active lawsuit against Microsoft and OpenAI over GitHub Copilot, and many, many Japanese artists angry about Mimic. If we continue to take instead of ask, the law will change to make that taking theft.
 
 ## Current status
 
