@@ -1,7 +1,7 @@
-from PDDiffusion.train import SampleConfig, load_dataset, load_model_and_progress
+from PDDiffusion.train import TrainingOptions, load_dataset, load_model_and_progress
 from PDDiffusion.test import evaluate
 
-import os.path, torch, math, json
+import os.path, torch, math, json, sys
 
 from accelerate import Accelerator, find_executable_batch_size
 from diffusers import DDPMScheduler, DDPMPipeline
@@ -10,7 +10,7 @@ from diffusers.hub_utils import init_git_repo, push_to_hub
 from tqdm.auto import tqdm
 import torch.nn.functional as F
 
-config = SampleConfig()
+config = TrainingOptions.parse_args(sys.argv[1:])
 config.dataset_name = "pd-diffusion-wikimedia"
 
 dataset = load_dataset(config)

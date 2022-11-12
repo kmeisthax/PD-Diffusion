@@ -1,45 +1,45 @@
-import dataclasses
-
 from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
 from datasets import Dataset
 from diffusers import UNet2DModel
 from torchvision import transforms
 import os.path, json
+from dataclasses import field
+from argparse_dataclass import dataclass
 
-@dataclasses.dataclass
-class SampleConfig:
-    image_size = 128  # the generated image resolution
-    train_batch_size = 16
-    eval_batch_size = 16  # how many images to sample during evaluation
-    num_epochs = 50
-    gradient_accumulation_steps = 1
-    learning_rate = 1e-4
-    lr_warmup_steps = 500
+@dataclass
+class TrainingOptions:
+    image_size: int = 128  # the generated image resolution
+    train_batch_size: int = 16
+    eval_batch_size: int = 16  # how many images to sample during evaluation
+    num_epochs: int = 50
+    gradient_accumulation_steps: int = 1
+    learning_rate: float = 1e-4
+    lr_warmup_steps: int = 500
 
     #Generate an image every n epochs.
     #Image generation is processor-intensive, so this number should be relatively high.
     #Images will also be generated on the last epoch in the current run, no matter what.
-    save_image_epochs = 999
+    save_image_epochs: int = 999
 
     #Save the model every n epochs.
     #This is cheap, so I recommend doing it every epoch.
     #Training will resume from a saved model.
-    save_model_epochs = 1
-    mixed_precision = 'no'  # `no` for float32, `fp16` for automatic mixed precision
-    output_dir = 'pd-diffusion'  # the model namy locally and on the HF Hub
+    save_model_epochs: int = 1
+    mixed_precision: str = field(default = 'no', metadata={"choices": ["no", "fp16", "bf16"]})
+    output_dir: str = 'pd-diffusion'  # the model namy locally and on the HF Hub
 
-    push_to_hub = False  # whether to upload the saved model to the HF Hub
-    hub_private_repo = False  
-    overwrite_output_dir = True  # overwrite the old model when re-running the notebook
-    seed = 0
+    push_to_hub: bool = False  # whether to upload the saved model to the HF Hub
+    hub_private_repo: bool = False  
+    overwrite_output_dir: bool = True  # overwrite the old model when re-running the notebook
+    seed: int = 0
 
-    ddpm_train_timesteps = 1000
-    ddpm_beta_schedule = "linear"
+    ddpm_train_timesteps: int = 1000
+    ddpm_beta_schedule: str = "linear"
 
-    adam_beta1 = 0.95
-    adam_beta2 = 0.999
-    adam_weight_decay = 1e-6
-    adam_epsilon = 1e-08
+    adam_beta1:float = 0.95
+    adam_beta2:float = 0.999
+    adam_weight_decay:float = 1e-6
+    adam_epsilon:float = 1e-08
 
 def preprocessor(config):
     return transforms.Compose(
