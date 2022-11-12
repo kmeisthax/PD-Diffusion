@@ -1,28 +1,23 @@
-import os, torch
+import os, torch, json
 
 from PIL import Image
+from diffusers import UNet2DModel, DDPMPipeline, DDPMScheduler
 
-def make_grid(images, rows, cols):
-    w, h = images[0].size
-    grid = Image.new('RGB', size=(cols*w, rows*h))
-    for i, image in enumerate(images):
-        grid.paste(image, box=(i%cols*w, i//cols*h))
-    return grid
+def load_pretrained_unet(output_dir):
+    """Load pretrained UNet weights from a trained model package."""
+    return UNet2DModel.from_pretrained(os.path.join(output_dir, "unet"))
 
-def evaluate(config, epoch, pipeline):
-    # Sample some images from random noise (this is the backward diffusion process).
-    # The default pipeline output type is `List[PIL.Image]`
-    images = pipeline(
-        batch_size = config.eval_batch_size, 
-        generator=torch.manual_seed(config.seed),
-    ).images
-
-    # Make a grid out of the images
-    image_grid = make_grid(images, rows=4, cols=4)
-
-    # Save the images
-    test_dir = os.path.join(config.output_dir, "samples")
-    os.makedirs(test_dir, exist_ok=True)
-    image_grid.save(f"{test_dir}/{epoch:04d}.png")
+def load_pretrained_pipeline(output_dir, accelerator=None):
+    """Load a pretrained unconditional image generation pipeline from disk.
     
-    return image_grid
+    If an accelerator is provided, the pipeline will execute the given model on
+    that accelerator."""
+    with open(os.path.join(output_dir, "scheduler", "scheduler_config.json"), "r") as config_file:
+        config = json.load(config_file)
+
+        noise_scheduler = DDPMScheduler(num_train_timesteps=config["num_train_timesteps"], beta_schedule=config["beta_schedule"])
+        model = load_pretrained_unet(output_dir)
+        if accelerator is not None:
+            model = accelerator.prepare(model)
+
+        return DDPMPipeline(unet=model, scheduler=noise_scheduler)

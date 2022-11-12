@@ -1,10 +1,13 @@
 from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
+from PDDiffusion.test import load_pretrained_unet
+
 from datasets import Dataset
 from diffusers import UNet2DModel
 from torchvision import transforms
-import os.path, json
+import os.path, json, torch
 from dataclasses import field
 from argparse_dataclass import dataclass
+from PIL import Image
 
 @dataclass
 class TrainingOptions:
@@ -96,9 +99,38 @@ def load_model_and_progress(config):
     progress = {"last_epoch": -1}
 
     if os.path.exists(os.path.join(config.output_dir, "unet")):
-        model = UNet2DModel.from_pretrained(os.path.join(config.output_dir, "unet"))
+        model = load_pretrained_unet(config.output_dir)
 
         with open(os.path.join(config.output_dir, "progress.json"), "r") as progress_file:
             progress = json.load(progress_file)
     
     return (model, progress)
+
+def make_grid(images, rows, cols):
+    w, h = images[0].size
+    grid = Image.new('RGB', size=(cols*w, rows*h))
+    for i, image in enumerate(images):
+        grid.paste(image, box=(i%cols*w, i//cols*h))
+    return grid
+
+def evaluate(config, epoch, pipeline):
+    """Generate a grid of sample images using a partially-trained pipeline.
+
+    The training seed will be stable across multiple epochs so that human
+    observers can visually inspect training progress over time.
+    
+    Images will be stored in the model's samples directory with the given epoch's number."""
+    images = pipeline(
+        batch_size = config.eval_batch_size, 
+        generator=torch.manual_seed(config.seed),
+    ).images
+
+    # Make a grid out of the images
+    image_grid = make_grid(images, rows=4, cols=4)
+
+    # Save the images
+    test_dir = os.path.join(config.output_dir, "samples")
+    os.makedirs(test_dir, exist_ok=True)
+    image_grid.save(f"{test_dir}/{epoch:04d}.png")
+    
+    return image_grid
