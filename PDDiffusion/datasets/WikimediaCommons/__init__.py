@@ -6,10 +6,19 @@ BASE_API_ENDPOINT = "https://commons.wikimedia.org/w/api.php"
 
 DEFAULT_UA = "PD-Diffusion/0.0"
 
+class IdentityError(Exception):
+    pass
+
 class Connection(object):
-    def __init__(self, base_api_endpoint=BASE_API_ENDPOINT, ua=DEFAULT_UA):
+    def __init__(self, base_api_endpoint=BASE_API_ENDPOINT, ua=DEFAULT_UA, email=None):
+        if email is None:
+            raise IdentityError("Please provide an e-mail address as per Wikimedia guidelines")
+        
+        if email.endswith("@example.com"):
+            raise IdentityError("Please replace the example e-mail address with your own")
+        
         self.base_api_endpoint = base_api_endpoint
-        self.ua = ua
+        self.ua = "{} ({})".format(ua, email)
     
     def get(self, **query_params):
         query_params["format"] = "json"
