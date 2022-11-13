@@ -143,6 +143,16 @@ python -m PDDiffusion.unet.test --model_dir <name of your model> <output file.pn
 
 The generated image will be saved to the path you specify.
 
+### CLIP
+
+First, we need to *tokenize* the downloaded image labels:
+
+```
+python -m PDDiffusion.clip.tokenize --output_dir <name of your model>
+```
+
+TODO: Training CLIP with the tokenized vocabulary
+
 # Known Issues
 
 ## No GPU usage

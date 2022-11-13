@@ -126,7 +126,7 @@ def image_is_valid(file):
         print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
         return False
 
-def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted images", "Category:Cropped images", "Category:Extracted drawings"]):
+def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted images", "Category:Cropped images", "Category:Extracted drawings"], load_images=True):
     """Load in training data previously downloaded by running this module's main.
     
     Intended to be used as a Huggingface dataset via:
@@ -178,11 +178,14 @@ def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted ima
             print ("Warning: Image {} is unlabeled, skipping".format(file))
             continue
         
-        if not image_is_valid(file):
-            #Rename the file and its metadata for later inspection
-            os.rename(file, file + '.banned')
-            os.rename(file + '.json', file + '.bannedmetadata')
+        if load_images:
+            if not image_is_valid(file):
+                #Rename the file and its metadata for later inspection
+                os.rename(file, file + '.banned')
+                os.rename(file + '.json', file + '.bannedmetadata')
 
-            continue
-        
-        yield {"image": Image.open(os.path.abspath(file)), "image_file_path": os.path.abspath(file), "text": label}
+                continue
+            
+            yield {"image": Image.open(os.path.abspath(file)), "image_file_path": os.path.abspath(file), "text": label}
+        else:
+            yield {"text": label}
