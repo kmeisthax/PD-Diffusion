@@ -1,9 +1,7 @@
 from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
 from PDDiffusion.unet.test import load_pretrained_unet
 
-from datasets import Dataset
 from diffusers import UNet2DModel
-from torchvision import transforms
 import os.path, json, torch
 from dataclasses import field
 from argparse_dataclass import dataclass
@@ -41,33 +39,6 @@ class TrainingOptions:
     adam_beta2:float = field(default=0.999, metadata={"args": ["--adam_beta2"]})
     adam_weight_decay:float = field(default=1e-6, metadata={"args": ["--adam_weight_decay"]})
     adam_epsilon:float = field(default=1e-08, metadata={"args": ["--adam_epsilon"]})
-
-def preprocessor(config):
-    return transforms.Compose(
-        [
-            transforms.Resize(config.image_size, interpolation=transforms.InterpolationMode.BILINEAR),
-            transforms.CenterCrop(config.image_size),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5]),
-        ]
-    )
-
-def transformer(config):
-    preprocess = preprocessor(config)
-
-    def transform(examples):
-        images = [preprocess(image.convert("RGB")) for image in examples["image"]]
-        return {"images": images}
-    
-    return transform
-
-def load_dataset(config):
-    dataset = Dataset.from_generator(local_wikimedia)
-
-    dataset.set_transform(transformer(config))
-
-    return dataset
 
 def load_model_and_progress(config):
     model = UNet2DModel(

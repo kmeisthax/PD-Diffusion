@@ -1,6 +1,7 @@
-from PDDiffusion.unet.train import TrainingOptions, load_dataset, load_model_and_progress, evaluate
+from PDDiffusion.unet.train import TrainingOptions, load_model_and_progress, evaluate
+from PDDiffusion.image_loader import load_dataset
 
-import os.path, torch, math, json, sys
+import os.path, torch, json, sys
 
 from accelerate import Accelerator, find_executable_batch_size
 from diffusers import DDPMScheduler, DDPMPipeline
@@ -12,7 +13,7 @@ import torch.nn.functional as F
 config = TrainingOptions.parse_args(sys.argv[1:])
 config.dataset_name = "pd-diffusion-wikimedia"
 
-dataset = load_dataset(config)
+dataset = load_dataset(config.image_size)
 
 if not os.path.exists("output"):
     os.makedirs("output")
@@ -81,7 +82,7 @@ def train_loop(config):
             progress_bar.set_description(f"Epoch {epoch}")
 
             for step, batch in enumerate(train_dataloader):
-                clean_images = batch['images']
+                clean_images = batch['image']
                 # Sample noise to add to the images
                 noise = torch.randn(clean_images.shape).to(clean_images.device)
                 bs = clean_images.shape[0]
