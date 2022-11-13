@@ -1,5 +1,5 @@
 from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
-from PDDiffusion.test import load_pretrained_unet
+from PDDiffusion.unet.test import load_pretrained_unet
 
 from datasets import Dataset
 from diffusers import UNet2DModel

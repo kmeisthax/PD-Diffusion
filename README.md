@@ -113,25 +113,35 @@ Image *labels* are not public domain and may have attribution requirements that 
 
 TODO: Under consideration.
 
-## Training
+## Models
+
+There are several model architectures in use in the Latent/Stable Diffusion pipeline:
+
+ * **U-Nets** do the actual image generation. They can be trained as unconditional - meaning that they *just* draw, or conditional - meaning that they draw a specific thing that they are told to.
+ * **CLIP** translates between text and images and controls a *conditional* U-Net's image generation process.
+ * TBW: VKAutoencoders, super-resolution etc
+
+### Unconditional U-Nets
 
 ```
-python -m PDDiffusion.train --output_dir <name of your model>
+python -m PDDiffusion.unet.train --output_dir <name of your model>
 ```
 
 This pulls from the Wikimedia dataset you presumably scraped before.
 
-The model is set to save every training epoch; and reload from disk if the training process is restarted.
+It trains an *unconditional* U-Net - i.e. one that just generates images with no text prompt to start from.
 
-Trained model weights will be stored in the output directory. You can specify the name of the model with the --output_dir parameter.
+The default parameters are to save every training epoch. This allows reloading from disk if the training process falls over and dies.
 
-## Generation
+Trained model weights will be stored in the output directory you specify.
+
+Once trained you may generate new images with the `unet.test` module:
 
 ```
-python -m PDDiffusion.test --model_dir <name of your model> <output file.png>
+python -m PDDiffusion.unet.test --model_dir <name of your model> <output file.png>
 ```
 
-This assumes a pretrained pipeline stored locally in the output directory. The generated image will be saved to the path you specify.
+The generated image will be saved to the path you specify.
 
 # Known Issues
 

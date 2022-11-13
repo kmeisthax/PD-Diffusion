@@ -1,4 +1,4 @@
-from PDDiffusion.train import TrainingOptions, load_dataset, load_model_and_progress, evaluate
+from PDDiffusion.unet.train import TrainingOptions, load_dataset, load_model_and_progress, evaluate
 
 import os.path, torch, math, json, sys
 

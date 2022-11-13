@@ -1,4 +1,4 @@
-from PDDiffusion.test import load_pretrained_pipeline
+from PDDiffusion.unet.test import load_pretrained_pipeline
 from dataclasses import field
 from argparse_dataclass import dataclass
 from accelerate import Accelerator
