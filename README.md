@@ -151,7 +151,13 @@ First, we need to *tokenize* the downloaded image labels:
 python -m PDDiffusion.clip.tokenize --output_dir <name of your model>
 ```
 
-TODO: Training CLIP with the tokenized vocabulary
+Once CLIP's tokenizer vocabulary has been determined, you can train against your downloaded datasets:
+
+```
+python -m PDDiffusion.clip.tokenize <name of your model>
+```
+
+Your output directory should be separate from the directory you store your U-Nets.
 
 # Known Issues
 
