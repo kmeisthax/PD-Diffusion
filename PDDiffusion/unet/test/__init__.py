@@ -1,11 +1,14 @@
 import os, torch, json
 
 from PIL import Image
-from diffusers import UNet2DModel, DDPMPipeline, DDPMScheduler
+from diffusers import UNet2DModel, UNet2DConditionModel, DDPMPipeline, DDPMScheduler
 
-def load_pretrained_unet(output_dir):
+def load_pretrained_unet(output_dir, is_conditional=False):
     """Load pretrained UNet weights from a trained model package."""
-    return UNet2DModel.from_pretrained(os.path.join(output_dir, "unet"))
+    if is_conditional:
+        return UNet2DConditionModel.from_pretrained(os.path.join(output_dir, "unet"))
+    else:
+        return UNet2DModel.from_pretrained(os.path.join(output_dir, "unet"))
 
 def load_pretrained_pipeline(output_dir, accelerator=None):
     """Load a pretrained unconditional image generation pipeline from disk.

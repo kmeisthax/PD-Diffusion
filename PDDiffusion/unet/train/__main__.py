@@ -1,5 +1,4 @@
-from PDDiffusion.unet.train import TrainingOptions, load_model_and_progress, evaluate
-from PDDiffusion.image_loader import load_dataset
+from PDDiffusion.unet.train import TrainingOptions, load_model_and_progress, evaluate, load_condition_model_and_processor, load_dataset_with_condition
 
 import os.path, torch, json, sys
 
@@ -13,12 +12,11 @@ import torch.nn.functional as F
 config = TrainingOptions.parse_args(sys.argv[1:])
 config.dataset_name = "pd-diffusion-wikimedia"
 
-dataset = load_dataset(config.image_size)
+(cond_processor, cond_model) = load_condition_model_and_processor(config)
+dataset = load_dataset_with_condition(config, cond_processor, cond_model)
 
 if not os.path.exists("output"):
     os.makedirs("output")
-
-os.chdir("output")
 
 def train_loop(config):
     # Initialize accelerator and tensorboard logging
@@ -26,7 +24,7 @@ def train_loop(config):
         mixed_precision=config.mixed_precision,
         gradient_accumulation_steps=config.gradient_accumulation_steps, 
         log_with="tensorboard",
-        logging_dir=os.path.join(config.output_dir, "logs")
+        logging_dir=os.path.join("output", config.output_dir, "logs")
     )
     if accelerator.is_main_process:
         if config.push_to_hub:
@@ -40,7 +38,7 @@ def train_loop(config):
 
         train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-        (model, progress) = load_model_and_progress(config)
+        (model, progress) = load_model_and_progress(config, conditional_model=cond_model)
 
         optimizer = torch.optim.AdamW(
             model.parameters(),
@@ -95,8 +93,12 @@ def train_loop(config):
                 noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
                 
                 with accelerator.accumulate(model):
+                    condition = None
+                    if cond_model is not None and cond_processor is not None:
+                        condition = batch["condition"]
+
                     # Predict the noise residual
-                    noise_pred = model(noisy_images, timesteps, return_dict=False)[0]
+                    noise_pred = model(noisy_images, timesteps, return_dict=False, encoder_hidden_states=condition)[0]
                     loss = F.mse_loss(noise_pred, noise)
                     accelerator.backward(loss)
 
@@ -116,15 +118,15 @@ def train_loop(config):
                 pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
 
                 if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
-                    evaluate(config, epoch, pipeline)
+                    evaluate(config, epoch, pipeline, cond_model, cond_processor)
 
                 if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
                     if config.push_to_hub:
                         push_to_hub(config, pipeline, repo, commit_message=f"Epoch {epoch}", blocking=True)
                     else:
-                        pipeline.save_pretrained(config.output_dir)
+                        pipeline.save_pretrained(os.path.join("output", config.output_dir))
 
-                        with open(os.path.join(config.output_dir, "progress.json"), "w") as progress_file:
+                        with open(os.path.join("output", config.output_dir, "progress.json"), "w") as progress_file:
                             progress["last_epoch"] = epoch
                             json.dump(progress, progress_file)
     

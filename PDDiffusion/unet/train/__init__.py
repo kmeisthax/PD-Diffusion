@@ -1,7 +1,10 @@
 from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
+from PDDiffusion.image_loader import load_dataset, convert_and_augment_pipeline
 from PDDiffusion.unet.test import load_pretrained_unet
+from PDDiffusion.unet.pipeline import DDPMConditionalPipeline
 
-from diffusers import UNet2DModel
+from diffusers import UNet2DModel, UNet2DConditionModel, DDPMPipeline
+from transformers import CLIPModel, CLIPProcessor, CLIPFeatureExtractor, CLIPTokenizer
 import os.path, json, torch
 from dataclasses import field
 from argparse_dataclass import dataclass
@@ -16,6 +19,10 @@ class TrainingOptions:
     gradient_accumulation_steps: int = field(default=1, metadata={"args": ["--gradient_accumulation_steps"]})
     learning_rate: float = field(default=1e-4, metadata={"args": ["--learning_rate"]})
     lr_warmup_steps: int = field(default=500, metadata={"args": ["--lr_warmup_steps"]})
+
+    #Conditional training options
+    conditioned_on: str = field(default=None, metadata={"args": ["--conditioned_on"], "help": "Train a conditional model using this CLIP model's space as guidance."})
+    evaluation_prompt: str = field(default="a guinea pig", metadata={"args": ["--evaluation_prompt"], "help": "Sample prompt for evaluating a conditional U-Net"})
 
     #Generate an image every n epochs.
     #Image generation is processor-intensive, so this number should be relatively high.
@@ -40,40 +47,142 @@ class TrainingOptions:
     adam_weight_decay:float = field(default=1e-6, metadata={"args": ["--adam_weight_decay"]})
     adam_epsilon:float = field(default=1e-08, metadata={"args": ["--adam_epsilon"]})
 
-def load_model_and_progress(config):
-    model = UNet2DModel(
-        sample_size=config.image_size,  # the target image resolution
-        in_channels=3,  # the number of input channels, 3 for RGB images
-        out_channels=3,  # the number of output channels
-        layers_per_block=2,  # how many ResNet layers to use per UNet block
-        block_out_channels=(128, 128, 256, 256, 512, 512),  # the number of output channes for each UNet block
-        down_block_types=( 
-            "DownBlock2D",  # a regular ResNet downsampling block
-            "DownBlock2D", 
-            "DownBlock2D", 
-            "DownBlock2D", 
-            "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention
-            "DownBlock2D",
-        ), 
-        up_block_types=(
-            "UpBlock2D",  # a regular ResNet upsampling block
-            "AttnUpBlock2D",  # a ResNet upsampling block with spatial self-attention
-            "UpBlock2D", 
-            "UpBlock2D", 
-            "UpBlock2D", 
-            "UpBlock2D"  
+def load_condition_model_and_processor(config):
+    """Load the CLIP model as specified in our config.
+
+    Returns both the CLIP Processor and Model, in that order. If the model
+    calls for unconditional generation, returns nothing."""
+    if config.conditioned_on is None:
+        return (None, None)
+    
+    location = os.path.join("output", config.conditioned_on)
+    return (
+        CLIPProcessor(
+            CLIPFeatureExtractor.from_pretrained(location),
+            CLIPTokenizer.from_pretrained(location)
         ),
+        CLIPModel.from_pretrained(location)
     )
 
+def load_model_and_progress(config, conditional_model=None):
+    """Load a (potentially partially-trained) model from disk.
+    
+    If the configuration calls for a conditional U-Net (e.g. for use with CLIP)
+    then the conditional_model to train against should be provided here. We
+    will produce a model whose encoder_hidden_states is compatible with your
+    provided conditional model."""
+    common_model_settings = {
+        "sample_size": config.image_size,  # the target image resolution
+        "in_channels": 3,  # the number of input channels, 3 for RGB images
+        "out_channels": 3,  # the number of output channels
+        "layers_per_block": 2,  # how many ResNet layers to use per UNet block
+        "block_out_channels": (128, 128, 256, 256, 512, 512),  # the number of output channes for each UNet block
+    }
+
+    if config.conditioned_on is not None:
+        if conditional_model is None:
+            raise Exception("Cannot do conditional training without model to train against")
+
+        model = UNet2DConditionModel(
+            cross_attention_dim=conditional_model.config.projection_dim,
+
+            #Conditional U-Nets need cross-attention block types.
+            #This is roughly patterned against the Stable Diffusion ones,
+            #though Stable Diffusion works in a latent space and we're not (yet)
+            down_block_types=(
+                "CrossAttnDownBlock2D",
+                "CrossAttnDownBlock2D", 
+                "CrossAttnDownBlock2D", 
+                "CrossAttnDownBlock2D", 
+                "DownBlock2D",
+                "DownBlock2D",
+            ), 
+            up_block_types= (
+                "UpBlock2D",
+                "UpBlock2D",
+                "CrossAttnUpBlock2D", 
+                "CrossAttnUpBlock2D", 
+                "CrossAttnUpBlock2D", 
+                "CrossAttnUpBlock2D"  
+            ),
+            **common_model_settings
+        )
+    else:
+        model = UNet2DModel(
+            **common_model_settings,
+            down_block_types=(
+                "DownBlock2D",  # a regular ResNet downsampling block
+                "DownBlock2D", 
+                "DownBlock2D", 
+                "DownBlock2D", 
+                "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention
+                "DownBlock2D",
+            ), 
+            up_block_types= (
+                "UpBlock2D",  # a regular ResNet upsampling block
+                "AttnUpBlock2D",  # a ResNet upsampling block with spatial self-attention
+                "UpBlock2D", 
+                "UpBlock2D", 
+                "UpBlock2D", 
+                "UpBlock2D"  
+            ),
+        )
+    
     progress = {"last_epoch": -1}
 
-    if os.path.exists(os.path.join(config.output_dir, "unet")):
-        model = load_pretrained_unet(config.output_dir)
+    if os.path.exists(os.path.join("output", config.output_dir, "unet")):
+        model = load_pretrained_unet(os.path.join("output", config.output_dir), config.conditioned_on is not None)
 
-        with open(os.path.join(config.output_dir, "progress.json"), "r") as progress_file:
+        with open(os.path.join("output", config.output_dir, "progress.json"), "r") as progress_file:
             progress = json.load(progress_file)
     
     return (model, progress)
+
+def load_dataset_with_condition(config, cond_processor=None, cond_model=None):
+    """Load all our datasets.
+    
+    If a conditional model and processor are provided, condition-space vectors
+    for that model will be calculated for every image in the training set. They
+    will be stored in the "condition" column for your dataset."""
+
+    dataset = load_dataset(config.image_size)
+    if cond_model is None or cond_processor is None:
+        return dataset
+    
+    preprocess = convert_and_augment_pipeline(config.image_size)
+    clip_preprocess = convert_and_augment_pipeline(cond_model.vision_model.config.image_size)
+
+    def clip_classify(examples):
+        images = [preprocess(image.convert("RGB")) for image in examples["image"]]
+        clip_images = [clip_preprocess(image.convert("RGB")) for image in examples["image"]]
+        encoded_images = cond_processor(images=clip_images, return_tensors="pt")
+        condition = cond_model.vision_model(**encoded_images)
+
+        return {
+            "image": images,
+            "condition": condition
+        }
+
+    dataset.set_transform(clip_classify, columns=["image"], output_all_columns=True)
+
+    return dataset
+
+def create_model_pipeline(config, accelerator, model, noise_scheduler, cond_model=None, cond_processor=None):
+    """Create a model pipeline for evaluation or saving.
+    
+    cond_model and cond_processor should be the conditional model and
+    preprocessor used to calcluate guidance during training. If you aren't
+    training a conditional model, these may be omitted."""
+
+    if config.conditioned_on is not None:
+        return DDPMConditionalPipeline(
+            unet=accelerator.unwrap_model(model),
+            text_encoder=cond_model.text_model,
+            tokenizer=cond_processor.tokenizer,
+            scheduler=noise_scheduler
+        )
+    else:
+        return DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
 
 def make_grid(images, rows, cols):
     w, h = images[0].size
@@ -88,7 +197,14 @@ def evaluate(config, epoch, pipeline):
     The training seed will be stable across multiple epochs so that human
     observers can visually inspect training progress over time.
     
-    Images will be stored in the model's samples directory with the given epoch's number."""
+    Images will be stored in the model's samples directory with the given epoch's number.
+
+    If the config has conditional training enabled, we assume the pipeline is
+    also conditional and provide it with a prompt."""
+    prompt=None
+    if config.conditioned_on is not None:
+        prompt = config.evaluation_prompt
+
     images = pipeline(
         batch_size = config.eval_batch_size, 
         generator=torch.manual_seed(config.seed),
@@ -98,7 +214,7 @@ def evaluate(config, epoch, pipeline):
     image_grid = make_grid(images, rows=4, cols=4)
 
     # Save the images
-    test_dir = os.path.join(config.output_dir, "samples")
+    test_dir = os.path.join("output", config.output_dir, "samples")
     os.makedirs(test_dir, exist_ok=True)
     image_grid.save(f"{test_dir}/{epoch:04d}.png")
     
