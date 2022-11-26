@@ -119,21 +119,68 @@ There are several model architectures in use in the Latent/Stable Diffusion pipe
 
  * **U-Nets** do the actual image generation. They can be trained as unconditional - meaning that they *just* draw, or conditional - meaning that they draw a specific thing that they are told to.
  * **CLIP** translates between text and images and controls a *conditional* U-Net's image generation process.
- * TBW: VKAutoencoders, super-resolution etc
+ * **VAE** defines a *latent space* that is more computationally efficient to train U-Nets in.
+ * TBW: super-resolution etc
 
-### Unconditional U-Nets
+The general order of training is CLIP, then VAE, then U-Net. You can still train a U-Net while skipping some of the precursor steps, with the caveat that you won't get the benefit that such a model provides.
+
+### CLIP
+
+CLIP is a multimodal image and text classifier. It compresses text and images into a representation of about 512 numbers; which can then be used to either compare images to a text prompt, or in our case tell a U-Net *what* to draw.
+
+CLIP does not take text or image input directly. Instead, text is *tokenized* and images are *normalized*. For text, we have to pretrain a tokenizer on the text labels in our training set, as such:
 
 ```
-python -m PDDiffusion.unet.train --output_dir <name of your model>
+python -m PDDiffusion.clip.tokenize --output_dir <name of your model>
 ```
 
-This pulls from the Wikimedia dataset you presumably scraped before.
+There is currently no step for training the image normalizer from scratch; it only has six parameters (mean/std of R, G, and B) and we use the ones from OpenAI CLIP.
 
-It trains an *unconditional* U-Net - i.e. one that just generates images with no text prompt to start from.
+Once CLIP's tokenizer vocabulary has been determined, you can train CLIP itself:
 
-The default parameters are to save every training epoch. This allows reloading from disk if the training process falls over and dies.
+```
+python -m PDDiffusion.clip.tokenize <name of your model>
+```
 
-Trained model weights will be stored in the output directory you specify.
+Your output directory should be separate from the directory you store your U-Nets.
+
+### VAE
+
+TODO: How to train a latent space
+
+### U-Net
+
+The U-Net is the model used to actually draw images. It can be adapted to run with conditional guidance (using CLIP), in a latent space (using VAE), or both. In the default configuration - i.e. unconditional drawing in pixel space - it will draw images that would "fit in" to the training set you gave it. (e.g. if you hand it a bunch of flower pictures, it will draw flowers)
+
+#### Unconditional training
+
+To train unconditionally:
+
+```
+python -m PDDiffusion.unet.train <name of your model>
+```
+
+The default parameters are to save every training epoch. This allows reloading from disk if the training process falls over and dies. Trained model weights will be stored in the output directory you specify.
+
+The script may also evaluate your model by generating images for you to inspect after a certain number of epochs. By default, this is set to 999, so it will only generate an image at the end of training. The `--save_image_epochs` parameter can be used to save images more frequently, at the cost of a longer training time.
+
+#### Conditional training
+
+If you trained CLIP as described above, you may provide your trained CLIP model using the `--conditioned_on` parameter.
+
+```
+python -m PDDiffusion.unet.train --conditioned_on <name of your CLIP source> --evaluation_prompt <image prompt to use during evaluation> <name of your model>
+```
+
+Please make sure to not save your U-Net in the same location you saved your CLIP model.
+
+Note that most conditional pipelines are also *latent-space* pipelines. We ship a custom pipeline to support conditional pixel-space image generation; saved models will not work with the standard pipelines.
+
+#### Latent-space training
+
+TODO: How to use a VAE to denoise in latent space. This is necessary to use the Stable Diffusion pipeline.
+
+#### Sample evaluation
 
 Once trained you may generate new images with the `unet.test` module:
 
@@ -142,22 +189,6 @@ python -m PDDiffusion.unet.test --model_dir <name of your model> <output file.pn
 ```
 
 The generated image will be saved to the path you specify.
-
-### CLIP
-
-First, we need to *tokenize* the downloaded image labels:
-
-```
-python -m PDDiffusion.clip.tokenize --output_dir <name of your model>
-```
-
-Once CLIP's tokenizer vocabulary has been determined, you can train against your downloaded datasets:
-
-```
-python -m PDDiffusion.clip.tokenize <name of your model>
-```
-
-Your output directory should be separate from the directory you store your U-Nets.
 
 # Known Issues
 
