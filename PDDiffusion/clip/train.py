@@ -7,6 +7,7 @@ from PDDiffusion.clip import load_model_and_progress, load_processor, load_datas
 from dataclasses import field
 from argparse_dataclass import dataclass
 from transformers import CLIPConfig, PreTrainedTokenizerBase, Trainer, TrainingArguments
+from transformers.trainer_utils import get_last_checkpoint
 from accelerate import Accelerator, find_executable_batch_size
 from diffusers.optimization import get_cosine_schedule_with_warmup
 from tqdm.auto import tqdm
@@ -22,7 +23,9 @@ class CLIPTrainingOptions:
     #Training loop parameters
     train_batch_size: int = field(default = 16, metadata={"args": ["--train_batch_size"], "help": "How many images to train per step. Will be reduced automatically if this exceeds the memory size of your GPU."})
     num_epochs: int = field(default = 50, metadata={"args": ["--num_epochs"], "help": "How many epochs to train for. You can only checkpoint the model at an epoch boundary."})
-    save_model_epochs: int = field(default=1, metadata={"args": ["--save_model_epochs"], "help": "How many epochs to wait in between saving model checkpoints."})
+    save_strategy: str = field(default="epoch", metadata={"args": ["--save_strategy"], "choices": ["no", "epoch", "steps"], "help": "When to save model checkpoints for resumption."})
+    save_steps: int = field(default=1, metadata={"args": ["--save_steps"], "help": "How many steps to wait in between saving model checkpoints, if save_strategy is set to 'steps'."})
+    save_total_limit: int = field(default=2, metadata={"args": ["--save_total_limit"], "help": "Number of checkpoints to retain. Keep in mind that checkpoints are multiple gigabytes in size"})
     mixed_precision: str = field(default = 'no', metadata={"args": ["--mixed_precision"], "choices": ["no", "fp16", "bf16"], "help": "What mixed-precision mode to use, if any."})
 
     #CLIP parameters
@@ -126,7 +129,11 @@ trainer = Trainer(
     model=model,
     args=TrainingArguments(
         output_dir=os.path.join("output", config.output_dir),
-        do_train=True, 
+        do_train=True,
+        num_train_epochs=config.num_epochs,
+        save_strategy=config.save_strategy,
+        save_steps=config.save_steps,
+        save_total_limit=config.save_total_limit,
 
         # ABSOLUTELY NOT. If you enable this, Trainer will DELETE your entire
         # dataset, and then throw an inscrutible error about invalid keys. Why?
@@ -137,4 +144,9 @@ trainer = Trainer(
     data_collator=collate_fn,
     tokenizer=processor.tokenizer
 )
-result = trainer.train()
+
+result = trainer.train(
+    resume_from_checkpoint=get_last_checkpoint(os.path.join("output", config.output_dir))
+)
+
+trainer.save_model(output_dir=os.path.join("output", config.output_dir))
