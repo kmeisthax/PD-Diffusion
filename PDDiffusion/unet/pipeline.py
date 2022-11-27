@@ -63,7 +63,7 @@ class DDPMConditionalPipeline(DiffusionPipeline):
         else:
             attention_mask = None
         
-        text_embeddings = self.text_encoder(text_inputs.input_ids.to(device), attention_mask=attention_mask)
+        text_embeddings = self.text_encoder(text_inputs.input_ids.to(device), attention_mask=attention_mask)[0]
 
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         bs_embed, seq_len, _ = text_embeddings.shape

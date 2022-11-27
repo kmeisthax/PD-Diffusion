@@ -1,4 +1,4 @@
-from PDDiffusion.unet.train import TrainingOptions, load_model_and_progress, evaluate, load_condition_model_and_processor, load_dataset_with_condition
+from PDDiffusion.unet.train import TrainingOptions, load_model_and_progress, evaluate, load_condition_model_and_processor, load_dataset_with_condition, create_model_pipeline
 
 import os.path, torch, json, sys
 
@@ -117,10 +117,10 @@ def train_loop(config):
 
             # After each epoch you optionally sample some demo images with evaluate() and save the model
             if accelerator.is_main_process:
-                pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
+                pipeline = create_model_pipeline(config, accelerator, model, noise_scheduler, cond_model, cond_processor)
 
                 if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
-                    evaluate(config, epoch, pipeline, cond_model, cond_processor)
+                    evaluate(config, epoch, pipeline)
 
                 if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
                     if config.push_to_hub:

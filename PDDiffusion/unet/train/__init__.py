@@ -208,14 +208,14 @@ def evaluate(config, epoch, pipeline):
 
     If the config has conditional training enabled, we assume the pipeline is
     also conditional and provide it with a prompt."""
-    prompt=None
+    pipeline_params = {
+        "batch_size": config.eval_batch_size,
+        "generator": torch.manual_seed(config.seed)
+    }
     if config.conditioned_on is not None:
-        prompt = config.evaluation_prompt
+        pipeline_params["prompt"] = config.evaluation_prompt
 
-    images = pipeline(
-        batch_size = config.eval_batch_size, 
-        generator=torch.manual_seed(config.seed),
-    ).images
+    images = pipeline(**pipeline_params).images
 
     # Make a grid out of the images
     image_grid = make_grid(images, rows=4, cols=4)
