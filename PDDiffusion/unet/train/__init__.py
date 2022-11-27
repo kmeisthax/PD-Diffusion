@@ -158,6 +158,9 @@ def load_dataset_with_condition(config, cond_processor=None, cond_model=None):
         images = [preprocess(image.convert("RGB")) for image in examples["image"]]
         clip_images = [clip_preprocess(image.convert("RGB")) for image in examples["image"]]
         encoded_images = cond_processor(images=clip_images, return_tensors="pt")
+        if cond_model.device != "cpu":
+            encoded_images.to(cond_model.device)
+        
         condition = cond_model.visual_projection(cond_model.vision_model(**encoded_images)[1])
 
         #Don't ask why but it does a normalization step in CLIPModel.
