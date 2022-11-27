@@ -158,11 +158,16 @@ def load_dataset_with_condition(config, cond_processor=None, cond_model=None):
         images = [preprocess(image.convert("RGB")) for image in examples["image"]]
         clip_images = [clip_preprocess(image.convert("RGB")) for image in examples["image"]]
         encoded_images = cond_processor(images=clip_images, return_tensors="pt")
-        condition = cond_model.vision_model(**encoded_images)
+        condition = cond_model.visual_projection(cond_model.vision_model(**encoded_images)[1])
+
+        #Don't ask why but it does a normalization step in CLIPModel.
+        #I can't do that here because CLIPModel will not allow you to use it
+        #without both text and image input, which is stupid
+        condition = condition / condition.norm(p=2, dim=-1, keepdim=True)
 
         return {
             "image": images,
-            "condition": condition
+            "condition": torch.unsqueeze(condition, 0)
         }
 
     dataset.set_transform(clip_classify, columns=["image"], output_all_columns=True)
