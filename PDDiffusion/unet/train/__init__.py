@@ -1,10 +1,11 @@
 from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
-from PDDiffusion.image_loader import load_dataset, convert_and_augment_pipeline
+from PDDiffusion.image_loader import load_dataset, convert_and_augment_pipeline, transformer
 from PDDiffusion.unet.test import load_pretrained_unet
 from PDDiffusion.unet.pipeline import DDPMConditionalPipeline
 
 from diffusers import UNet2DModel, UNet2DConditionModel, DDPMPipeline
 from transformers import CLIPModel, CLIPProcessor, CLIPFeatureExtractor, CLIPTokenizer
+from datasets import Dataset
 import os.path, json, torch
 from dataclasses import field
 from argparse_dataclass import dataclass
@@ -103,7 +104,7 @@ def load_model_and_progress(config, conditional_model=None):
                 "CrossAttnUpBlock2D", 
                 "CrossAttnUpBlock2D", 
                 "CrossAttnUpBlock2D", 
-                "CrossAttnUpBlock2D"  
+                "CrossAttnUpBlock2D"
             ),
             **common_model_settings
         )
@@ -145,9 +146,10 @@ def load_dataset_with_condition(config, cond_processor=None, cond_model=None):
     for that model will be calculated for every image in the training set. They
     will be stored in the "condition" column for your dataset."""
 
-    dataset = load_dataset(config.image_size)
     if cond_model is None or cond_processor is None:
-        return dataset
+        return load_dataset(config.image_size)
+    
+    dataset = Dataset.from_generator(local_wikimedia)
     
     preprocess = convert_and_augment_pipeline(config.image_size)
     clip_preprocess = convert_and_augment_pipeline(cond_model.vision_model.config.image_size)

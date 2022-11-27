@@ -12,9 +12,6 @@ import torch.nn.functional as F
 config = TrainingOptions.parse_args(sys.argv[1:])
 config.dataset_name = "pd-diffusion-wikimedia"
 
-(cond_processor, cond_model) = load_condition_model_and_processor(config)
-dataset = load_dataset_with_condition(config, cond_processor, cond_model)
-
 if not os.path.exists("output"):
     os.makedirs("output")
 
@@ -30,6 +27,9 @@ def train_loop(config):
         if config.push_to_hub:
             repo = init_git_repo(config, at_init=True)
         accelerator.init_trackers("train_example")
+    
+    (cond_processor, cond_model) = load_condition_model_and_processor(config)
+    dataset = load_dataset_with_condition(config, cond_processor, cond_model)
 
     @find_executable_batch_size(starting_batch_size=config.train_batch_size)
     def inner_training_loop(batch_size):
@@ -93,12 +93,14 @@ def train_loop(config):
                 noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
                 
                 with accelerator.accumulate(model):
-                    condition = None
+                    parameters = {
+                        "return_dict": False
+                    }
                     if cond_model is not None and cond_processor is not None:
-                        condition = batch["condition"]
+                        parameters["encoder_hidden_states"] = batch["condition"]
 
                     # Predict the noise residual
-                    noise_pred = model(noisy_images, timesteps, return_dict=False, encoder_hidden_states=condition)[0]
+                    noise_pred = model(noisy_images, timesteps, **parameters)[0]
                     loss = F.mse_loss(noise_pred, noise)
                     accelerator.backward(loss)
 
