@@ -130,7 +130,7 @@ class DDPMConditionalPipeline(DiffusionPipeline):
             )
             generator = None
         
-        text_embeddings = self._encode_prompt(prompt, self._execution_device, batch_size)
+        text_embeddings = self._encode_prompt(prompt, self.device, batch_size)
 
         # Sample gaussian noise to begin loop
         if isinstance(self.unet.sample_size, int):
