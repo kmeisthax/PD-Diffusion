@@ -117,11 +117,11 @@ class DDPMConditionalPipeline(DiffusionPipeline):
             new_config["prediction_type"] = "epsilon" if predict_epsilon else "sample"
             self.scheduler._internal_dict = FrozenDict(new_config)
 
-        if generator is not None and generator.device.type != self.device.type and self.device.type != "mps":
+        if generator is not None and generator.device.type != self.unet.device.type and self.unet.device.type != "mps":
             message = (
                 f"The `generator` device is `{generator.device}` and does not match the pipeline "
-                f"device `{self.device}`, so the `generator` will be ignored. "
-                f'Please use `torch.Generator(device="{self.device}")` instead.'
+                f"device `{self.unet.device}`, so the `generator` will be ignored. "
+                f'Please use `torch.Generator(device="{self.unet.device}")` instead.'
             )
             deprecate(
                 "generator.device == 'cpu'",
@@ -130,7 +130,7 @@ class DDPMConditionalPipeline(DiffusionPipeline):
             )
             generator = None
         
-        text_embeddings = self._encode_prompt(prompt, self.device, batch_size)
+        text_embeddings = self._encode_prompt(prompt, self.unet.device, batch_size)
 
         # Sample gaussian noise to begin loop
         if isinstance(self.unet.sample_size, int):
@@ -138,12 +138,12 @@ class DDPMConditionalPipeline(DiffusionPipeline):
         else:
             image_shape = (batch_size, self.unet.in_channels, *self.unet.sample_size)
 
-        if self.device.type == "mps":
+        if self.unet.device.type == "mps":
             # randn does not work reproducibly on mps
             image = torch.randn(image_shape, generator=generator)
-            image = image.to(self.device)
+            image = image.to(self.unet.device)
         else:
-            image = torch.randn(image_shape, generator=generator, device=self.device)
+            image = torch.randn(image_shape, generator=generator, device=self.unet.device)
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
