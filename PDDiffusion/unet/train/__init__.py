@@ -4,7 +4,7 @@ from PDDiffusion.unet.test import load_pretrained_unet
 from PDDiffusion.unet.pipeline import DDPMConditionalPipeline
 
 from diffusers import UNet2DModel, UNet2DConditionModel, DDPMPipeline
-from transformers import CLIPModel, CLIPProcessor, CLIPFeatureExtractor, CLIPTokenizer
+from transformers import CLIPModel, CLIPTextModel, CLIPProcessor, CLIPFeatureExtractor, CLIPTokenizer
 from datasets import Dataset
 import os.path, json, torch
 from dataclasses import field
@@ -185,9 +185,10 @@ def create_model_pipeline(config, accelerator, model, noise_scheduler, cond_mode
     training a conditional model, these may be omitted."""
 
     if config.conditioned_on is not None:
+        #We can't actually USE the text model from cond_model lol
         return DDPMConditionalPipeline(
             unet=accelerator.unwrap_model(model),
-            text_encoder=cond_model.text_model,
+            text_encoder=CLIPTextModel.from_pretrained(os.path.join("output", config.conditioned_on)).to(model.device),
             tokenizer=cond_processor.tokenizer,
             scheduler=noise_scheduler
         )
