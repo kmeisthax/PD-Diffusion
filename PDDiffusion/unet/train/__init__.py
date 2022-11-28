@@ -185,6 +185,9 @@ def create_model_pipeline(config, accelerator, model, noise_scheduler, cond_mode
     training a conditional model, these may be omitted."""
 
     if config.conditioned_on is not None:
+        #Shut up warnings about loading both model heads into the text model
+        CLIPTextModel._keys_to_ignore_on_load_unexpected = ['vision_model\..*', 'visual_projection\..*', 'text_projection\..*', 'logit_scale']
+
         #We can't actually USE the text model from cond_model lol
         return DDPMConditionalPipeline(
             unet=accelerator.unwrap_model(model),
