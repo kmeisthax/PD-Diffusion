@@ -8,6 +8,9 @@ from diffusers.optimization import get_cosine_schedule_with_warmup
 from diffusers.hub_utils import init_git_repo, push_to_hub
 from tqdm.auto import tqdm
 import torch.nn.functional as F
+from PIL import ImageFile
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 config = TrainingOptions.parse_args(sys.argv[1:])
 config.dataset_name = "pd-diffusion-wikimedia"
