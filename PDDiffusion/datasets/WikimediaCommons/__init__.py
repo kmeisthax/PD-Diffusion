@@ -2,6 +2,7 @@ import requests, urllib.request, glob, os.path, itertools, json, PIL
 from PIL import Image
 
 LOCAL_STORAGE = os.path.join("sets", "wikimedia")
+LOCAL_RESIZE_CACHE = os.path.join("sets", "wikimedia-cache")
 BASE_API_ENDPOINT = "https://commons.wikimedia.org/w/api.php"
 
 DEFAULT_UA = "PD-Diffusion/0.0"
@@ -126,7 +127,7 @@ def image_is_valid(file):
         print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
         return False
 
-def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted images", "Category:Cropped images", "Category:Extracted drawings"], load_images=True):
+def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted images", "Category:Cropped images", "Category:Extracted drawings"], load_images=True, intended_maximum_size=512):
     """Load in training data previously downloaded by running this module's main.
     
     Intended to be used as a Huggingface dataset via:
@@ -137,6 +138,10 @@ def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted ima
     data = Dataset.from_generator(local_wikimedia)```"""
     
     count = 0
+
+    resize_cache = os.path.join(LOCAL_RESIZE_CACHE, str(intended_maximum_size))
+    if not os.path.exists(resize_cache):
+        os.makedirs(resize_cache)
     
     for file in itertools.chain(
             glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpg")),
@@ -185,6 +190,20 @@ def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted ima
                 os.rename(file + '.json', file + '.bannedmetadata')
 
                 continue
+
+            #Check if our image has been resized down already, and if so use it.
+            resized_file = os.path.join(resize_cache, os.path.basename(file))
+            if os.path.exists(resized_file) and image_is_valid(resized_file):
+                file = resized_file
+            else:
+                #Otherwise check if this image is too large and if so, downscale.
+                image = Image.open(file)
+                if image.width > intended_maximum_size or image.height > intended_maximum_size:
+                    image.thumbnail((intended_maximum_size, intended_maximum_size))
+                    image.save(resized_file)
+                    image.close()
+
+                    file = resized_file
             
             yield {"image": Image.open(os.path.abspath(file)), "image_file_path": os.path.abspath(file), "text": label}
         else:
