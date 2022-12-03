@@ -124,20 +124,21 @@ def train_loop(config):
 
             # After each epoch you optionally sample some demo images with evaluate() and save the model
             if accelerator.is_main_process:
-                pipeline = create_model_pipeline(config, accelerator, model, noise_scheduler)
+                with torch.no_grad():
+                    pipeline = create_model_pipeline(config, accelerator, model, noise_scheduler)
 
-                if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
-                    evaluate(config, epoch, pipeline)
+                    if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
+                        evaluate(config, epoch, pipeline)
 
-                if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
-                    if config.push_to_hub:
-                        push_to_hub(config, pipeline, repo, commit_message=f"Epoch {epoch}", blocking=True)
-                    else:
-                        pipeline.save_pretrained(os.path.join("output", config.output_dir))
+                    if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
+                        if config.push_to_hub:
+                            push_to_hub(config, pipeline, repo, commit_message=f"Epoch {epoch}", blocking=True)
+                        else:
+                            pipeline.save_pretrained(os.path.join("output", config.output_dir))
 
-                        with open(os.path.join("output", config.output_dir, "progress.json"), "w") as progress_file:
-                            progress["last_epoch"] = epoch
-                            json.dump(progress, progress_file)
+                            with open(os.path.join("output", config.output_dir, "progress.json"), "w") as progress_file:
+                                progress["last_epoch"] = epoch
+                                json.dump(progress, progress_file)
     
     inner_training_loop()
 
