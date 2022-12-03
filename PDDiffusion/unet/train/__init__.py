@@ -158,17 +158,23 @@ def load_dataset_with_condition(config, accelerator):
         return (load_dataset(config.image_size), None)
     
     dataset = Dataset.from_generator(local_wikimedia)
-    
-    (cond_processor, cond_model) = load_condition_model_and_processor(config)
-    cond_model = accelerator.prepare(cond_model)
-    clip_preprocess = convert_and_augment_pipeline(cond_model.vision_model.config.image_size)
 
     transform = transformer(config.image_size)
+    cond_config = None
 
     @torch.no_grad()
     def clip_classify(images):
         @find_executable_batch_size(starting_batch_size=config.train_batch_size)
         def inner_batch(batch_size):
+            nonlocal cond_config
+            
+            (cond_processor, cond_model) = load_condition_model_and_processor(config)
+            cond_model = accelerator.prepare(cond_model)
+            clip_preprocess = convert_and_augment_pipeline(cond_model.vision_model.config.image_size)
+
+            #Extract the config outside of the batched/no-grad area
+            cond_config = cond_model.config
+            
             progress_bar = tqdm(total=math.ceil(len(images) / batch_size), disable=not accelerator.is_local_main_process)
             progress_bar.set_description(f"CLIP Image Processing")
 
@@ -218,7 +224,7 @@ def load_dataset_with_condition(config, accelerator):
         features=Features({"condition": [Value(current_fp_type)], "image": DatasetsImage(), "image_file_path": Value("string"), "text": Value("string")}))
     dataset.set_transform(transform, columns=["image"], output_all_columns=True)
 
-    return (dataset, cond_model.config)
+    return (dataset, cond_config)
 
 def create_model_pipeline(config, accelerator, model, noise_scheduler):
     """Create a model pipeline for evaluation or saving."""
