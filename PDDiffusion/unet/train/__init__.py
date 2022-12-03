@@ -198,8 +198,6 @@ def load_dataset_with_condition(config, accelerator):
                 
                 progress_bar.update(1)
             
-            print (conditions[0], images[0])
-            
             return {
                 "image": images,
                 "condition": conditions
