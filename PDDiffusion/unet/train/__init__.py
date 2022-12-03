@@ -231,7 +231,6 @@ def create_model_pipeline(config, accelerator, model, noise_scheduler):
 
     if config.conditioned_on is not None:
         (cond_processor, cond_model) = load_condition_model_and_processor(config)
-        cond_model = accelerator.prepare(cond_model)
 
         #Shut up warnings about loading both model heads into the text model
         CLIPTextModel._keys_to_ignore_on_load_unexpected = ['vision_model\..*', 'visual_projection\..*', 'text_projection\..*', 'logit_scale']
