@@ -31,9 +31,7 @@ def train_loop(config):
             repo = init_git_repo(config, at_init=True)
         accelerator.init_trackers("train_example")
     
-    (cond_processor, cond_model) = load_condition_model_and_processor(config)
-    cond_model = accelerator.prepare(cond_model)
-    dataset = load_dataset_with_condition(config, cond_processor, cond_model)
+    (dataset, cond_model_config) = load_dataset_with_condition(config, accelerator)
 
     @find_executable_batch_size(starting_batch_size=config.train_batch_size)
     def inner_training_loop(batch_size):
@@ -42,7 +40,7 @@ def train_loop(config):
 
         train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-        (model, progress) = load_model_and_progress(config, conditional_model=cond_model)
+        (model, progress) = load_model_and_progress(config, conditional_model_config=cond_model_config)
 
         optimizer = torch.optim.AdamW(
             model.parameters(),
@@ -100,8 +98,13 @@ def train_loop(config):
                     parameters = {
                         "return_dict": False
                     }
-                    if cond_model is not None and cond_processor is not None:
-                        parameters["encoder_hidden_states"] = batch["condition"]
+                    if config.conditioned_on is not None:
+                        # The stack operation unflips the dataset CLIP vectors.
+                        # For some reason, batching turns 16 512-wide CLIP vectors
+                        # into one 512x16 (ish) vector.
+                        # The unsqueeze adds a dimension because Cross Attention
+                        # blocks support multiple condition inputs per batch.
+                        parameters["encoder_hidden_states"] = torch.stack(batch["condition"], 1).unsqueeze(1)
 
                     # Predict the noise residual
                     noise_pred = model(noisy_images, timesteps, **parameters)[0]
@@ -121,7 +124,7 @@ def train_loop(config):
 
             # After each epoch you optionally sample some demo images with evaluate() and save the model
             if accelerator.is_main_process:
-                pipeline = create_model_pipeline(config, accelerator, model, noise_scheduler, cond_model, cond_processor)
+                pipeline = create_model_pipeline(config, accelerator, model, noise_scheduler)
 
                 if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
                     evaluate(config, epoch, pipeline)

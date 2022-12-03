@@ -3,10 +3,12 @@ from PDDiffusion.image_loader import load_dataset, convert_and_augment_pipeline,
 from PDDiffusion.unet.test import load_pretrained_unet
 from PDDiffusion.unet.pipeline import DDPMConditionalPipeline
 
+from accelerate import find_executable_batch_size
 from diffusers import UNet2DModel, UNet2DConditionModel, DDPMPipeline
 from transformers import CLIPModel, CLIPTextModel, CLIPProcessor, CLIPFeatureExtractor, CLIPTokenizer
-from datasets import Dataset
-import os.path, json, torch
+from datasets import Dataset, Features, Value, Image as DatasetsImage
+from tqdm.auto import tqdm
+import os.path, json, torch, math
 from dataclasses import field
 from argparse_dataclass import dataclass
 from PIL import Image
@@ -65,13 +67,13 @@ def load_condition_model_and_processor(config):
         CLIPModel.from_pretrained(location)
     )
 
-def load_model_and_progress(config, conditional_model=None):
+def load_model_and_progress(config, conditional_model_config=None):
     """Load a (potentially partially-trained) model from disk.
     
     If the configuration calls for a conditional U-Net (e.g. for use with CLIP)
-    then the conditional_model to train against should be provided here. We
-    will produce a model whose encoder_hidden_states is compatible with your
-    provided conditional model."""
+    then the configuration of the conditional_model to train against should be
+    provided here. We will produce a model whose encoder_hidden_states is
+    compatible with your provided conditional model."""
     common_model_settings = {
         "sample_size": config.image_size,  # the target image resolution
         "in_channels": 3,  # the number of input channels, 3 for RGB images
@@ -81,11 +83,11 @@ def load_model_and_progress(config, conditional_model=None):
     }
 
     if config.conditioned_on is not None:
-        if conditional_model is None:
-            raise Exception("Cannot do conditional training without model to train against")
+        if conditional_model_config is None:
+            raise Exception("Cannot do conditional training without model config to train against")
 
         model = UNet2DConditionModel(
-            cross_attention_dim=conditional_model.config.projection_dim,
+            cross_attention_dim=conditional_model_config.projection_dim,
 
             #Conditional U-Nets need cross-attention block types.
             #This is roughly patterned against the Stable Diffusion ones,
@@ -139,52 +141,94 @@ def load_model_and_progress(config, conditional_model=None):
     
     return (model, progress)
 
-def load_dataset_with_condition(config, cond_processor=None, cond_model=None):
+def load_dataset_with_condition(config, accelerator):
     """Load all our datasets.
-    
-    If a conditional model and processor are provided, condition-space vectors
-    for that model will be calculated for every image in the training set. They
-    will be stored in the "condition" column for your dataset."""
 
-    if cond_model is None or cond_processor is None:
-        return load_dataset(config.image_size)
+    If the config calls for conditional training, we will load the specified
+    conditional model and insert condition vectors into the dataset. This is an
+    all-at-once process so that the conditional model does not remain loaded in
+    accelerator memory during the training process.
+    
+    All models used in this process will be loaded onto the given accerlator
+    and then unloaded when done.
+    
+    Returns the conditional model configuration if applicable."""
+
+    if config.conditioned_on is None:
+        return (load_dataset(config.image_size), None)
     
     dataset = Dataset.from_generator(local_wikimedia)
     
-    preprocess = convert_and_augment_pipeline(config.image_size)
+    (cond_processor, cond_model) = load_condition_model_and_processor(config)
+    cond_model = accelerator.prepare(cond_model)
     clip_preprocess = convert_and_augment_pipeline(cond_model.vision_model.config.image_size)
 
-    def clip_classify(examples):
-        images = [preprocess(image.convert("RGB")) for image in examples["image"]]
-        clip_images = [clip_preprocess(image.convert("RGB")) for image in examples["image"]]
-        encoded_images = cond_processor(images=clip_images, return_tensors="pt")
-        if cond_model.device != "cpu":
-            encoded_images.to(cond_model.device)
+    transform = transformer(config.image_size)
+
+    @torch.no_grad()
+    def clip_classify(images):
+        @find_executable_batch_size(starting_batch_size=config.train_batch_size)
+        def inner_batch(batch_size):
+            progress_bar = tqdm(total=math.ceil(len(images) / batch_size), disable=not accelerator.is_local_main_process)
+            progress_bar.set_description(f"CLIP Image Processing")
+
+            conditions = []
+
+            for i in range(0, len(images), batch_size):
+                clip_images = [clip_preprocess(Image.open(image["path"]).convert("RGB")) for image in images[i:i+batch_size]]
+                encoded_images = cond_processor(images=clip_images, return_tensors="pt")
+                if cond_model.device != "cpu":
+                    encoded_images.to(cond_model.device)
+                
+                condition = cond_model.visual_projection(cond_model.vision_model(**encoded_images)[1])
+
+                #Don't ask why but there's a normalization step in CLIPModel.
+                #I'd just call into CLIPModel directly but I can't, because it
+                #won't do ONLY text or ONLY images. It wants both.
+                condition = condition / condition.norm(p=2, dim=-1, keepdim=True)
+                condition = condition.to("cpu")
+
+                if config.mixed_precision == "fp16":
+                    condition = condition.type(torch.float16)
+                elif config.mixed_precision == "bf16":
+                    condition = condition.type(torch.bfloat16)
+                
+                for row in condition:
+                    conditions.append(row)
+                
+                progress_bar.update(1)
+            
+            print (conditions[0], images[0])
+            
+            return {
+                "image": images,
+                "condition": conditions
+            }
         
-        condition = cond_model.visual_projection(cond_model.vision_model(**encoded_images)[1])
-
-        #Don't ask why but it does a normalization step in CLIPModel.
-        #I can't do that here because CLIPModel will not allow you to use it
-        #without both text and image input, which is stupid
-        condition = condition / condition.norm(p=2, dim=-1, keepdim=True)
-
-        return {
-            "image": images,
-            "condition": torch.unsqueeze(condition, 0)
-        }
-
-    dataset.set_transform(clip_classify, columns=["image"], output_all_columns=True)
-
-    return dataset
-
-def create_model_pipeline(config, accelerator, model, noise_scheduler, cond_model=None, cond_processor=None):
-    """Create a model pipeline for evaluation or saving.
+        return inner_batch()
     
-    cond_model and cond_processor should be the conditional model and
-    preprocessor used to calcluate guidance during training. If you aren't
-    training a conditional model, these may be omitted."""
+    current_fp_type = "float32"
+    if config.mixed_precision == "fp16":
+        current_fp_type = "float16"
+    elif config.mixed_precision == "bf16":
+        current_fp_type = "bfloat16" #TODO: not actually a documented FP type in Huggingface Datasets and I don't have an Ampere GPU to test
+    
+    dataset = dataset.map(clip_classify,
+        input_columns=["image"],
+        batched=True,
+        batch_size=None,
+        features=Features({"condition": [Value(current_fp_type)], "image": DatasetsImage(), "image_file_path": Value("string"), "text": Value("string")}))
+    dataset.set_transform(transform, columns=["image"], output_all_columns=True)
+
+    return (dataset, cond_model.config)
+
+def create_model_pipeline(config, accelerator, model, noise_scheduler):
+    """Create a model pipeline for evaluation or saving."""
 
     if config.conditioned_on is not None:
+        (cond_processor, cond_model) = load_condition_model_and_processor(config)
+        cond_model = accelerator.prepare(cond_model)
+
         #Shut up warnings about loading both model heads into the text model
         CLIPTextModel._keys_to_ignore_on_load_unexpected = ['vision_model\..*', 'visual_projection\..*', 'text_projection\..*', 'logit_scale']
 
