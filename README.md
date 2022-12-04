@@ -63,16 +63,51 @@ Some of the training code is copypasted from Huggingface's example Colab noteboo
 
 ## Setup
 
-After cloning this repository, `cd` into it and run the following commands.
+First, clone this repository and `cd` into it in a terminal. Make the following directories:
 
 ```
 mkdir output
 mkdir sets
+```
+
+The `sets` directory holds locally-scraped data and the `output` directory holds trained models.
+
+It's highly recommended to set up a virtual environment for PD-Diffusion, either with Conda or venv.
+
+### Conda install
+
+```
+conda create --name pd-diffusion
+conda activate pd-diffusion
+conda install pip
+```
+
+You are now in a Conda environment.
+
+Note that we will be making modifications to this environment in later steps. Grab the path that your environment was stored in by typing `conda info --envs` and noting the path. Alternatively you can use `conda create --prefix` instead of `--name` to create an environment in a known location; with the caveat that `conda activate` will require using the full path instead of the name every time you start it up.
+
+Open a terminal inside your Conda environment directory and type:
+
+```
+echo "../../../" > lib/site-packages/PDDiffusion.pth
+```
+
+This installs PDDiffusion itself into the virtual environment.
+
+The rest of the instructions assume you are in a terminal that has the Conda environment activated. Running `conda` or `pip` commands outside of this environment risks damaging your global Python install or base Conda environment.
+
+### PIP/venv install
+
+You can create an `env` directory inside the repository with the following command:
+
+```
 python3 -m venv env
 echo "../../../../" > env/lib/python3.10/site-packages/PDDiffusion.pth
 ```
 
 `python3` may just be `python` on some systems; the `python3.10` path component will differ if your system has a newer or older version of Python when it made the virtual environment.
+
+Note that the `env` directory is deliberately in `.gitignore`.
 
 You can jump into your environment by running or `source`ing the correct script for your environment. Python environments ship with an activation script that lives in a number of different places depending on OS and command interpreter:
 
@@ -83,13 +118,31 @@ You can jump into your environment by running or `source`ing the correct script 
 
 Once activated you will have a `python` and `pip` that installs packages to your virtual environment and leaves your system Python alone.
 
-Finally, you need to install the prerequisites listed in requirements.txt:
+### PyTorch
+
+Go to https://pytorch.org/get-started/locally/ and grab the install command for installing PyTorch *with the specific accelerator type and virtual environment you have*. If you have an Nvidia GPU, you need CUDA. AMD GPUs need ROCm. If you don't install the correct accelerator libraries on your machine, you'll either get an error or CPU-only training and inference, which is unusably slow.
+
+### xformers
+
+If you ask Facebook, you're supposed to just be able to:
+
+```
+conda install xformers -c xformers/label/dev
+```
+
+This does not work for me. Neither does the manual from-source method. Fortunately, there's a way that not only works, but also works with both Conda and `venv`s:
+
+Download the Python wheels from the latest successful job in https://github.com/facebookresearch/xformers/actions/workflows/wheels.yml. Make sure that the OS, Python version, PyTorch version, and CUDA version all match with what you installed in prior steps.
+
+Unzip the wheel, and then `pip install` the `.whl` file inside.
+
+### Everything else
+
+Finally, you can install the rest of the dependencies with:
 
 ```
 pip install -r requirements.txt
 ```
-
-Note: this may fail depending on your OS.
 
 ## Downloading datasets
 
@@ -194,24 +247,14 @@ The generated image will be saved to the path you specify. If you've trained a c
 
 ## No GPU usage
 
-PyTorch does not ship with GPU support by default on Windows. The `requirements.txt` file does not install the CUDA- or ROCm-aware versions of PyTorch.
+First, make sure you've run `accelerate config` in your current environment. If that doesn't fix the problem, then you have a non-GPU-aware PyTorch.
+
+PyTorch does not ship with GPU support by default, at least on Windows. The `requirements.txt` file does not install the CUDA- or ROCm-aware versions of PyTorch. If you installed that first, make sure to uninstall PyTorch *before* installing the correct version of PyTorch from https://pytorch.org/get-started/locally/.
 
 Note: Since all our examples recommend the use of a virtual environment, you still need to do this even if you've already installed GPU-aware PyTorch for Jupyter notebooks.
-
-To get a GPU-aware PyTorch, first uninstall PyTorch and then install one of the GPU-aware versions instead:
-
-```
-pip uninstall torch
-pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/cu117 ;for CUDA on Windows
-pip install torch torchvision --extra-index-url https://download.pytorch.org/whl/rocm5.2/ ;for ROCm on Linux
-```
-
-For up-to-date index URLs see https://pytorch.org/get-started/locally/
-
-Once a GPU-aware PyTorch has been installed, you should be able to configure it with `accelerate config` in your environment.
 
 ## Module 'signal' has no attribute 'SIGKILL'
 
 You're on Windows. PyTorch ships with code that assumes Unix signals are available in defaults.
 
-Manually corehack the `file_based_local_timer.py` file to use SIGTERM by default instead.
+Manually corehack the offending `file_based_local_timer.py` file in your virtual environment to use SIGTERM by default instead.
