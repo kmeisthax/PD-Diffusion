@@ -172,7 +172,7 @@ def load_dataset_with_condition(config, accelerator):
 
         def clip_classify(images):
             nonlocal cond_model
-            
+
             cond_model = accelerator.prepare(cond_model)
 
             @find_executable_batch_size(starting_batch_size=config.train_batch_size)
@@ -279,7 +279,7 @@ def evaluate(config, epoch, pipeline):
     also conditional and provide it with a prompt."""
     pipeline_params = {
         "batch_size": config.eval_batch_size,
-        "generator": torch.manual_seed(config.seed).to(pipeline.unet.device)
+        "generator": torch.manual_seed(config.seed)
     }
     if config.conditioned_on is not None:
         pipeline_params["prompt"] = config.evaluation_prompt
