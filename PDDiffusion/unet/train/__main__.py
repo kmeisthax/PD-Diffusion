@@ -136,10 +136,10 @@ def train_loop(config):
                 with torch.no_grad():
                     pipeline = create_model_pipeline(config, accelerator, model, noise_scheduler)
 
-                    if (epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1:
+                    if config.save_image_epochs <= config.num_epochs and ((epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1):
                         evaluate(config, epoch, pipeline)
 
-                    if (epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1:
+                    if config.save_model_epochs <= config.num_epochs and ((epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1):
                         if config.push_to_hub:
                             push_to_hub(config, pipeline, repo, commit_message=f"Epoch {epoch}", blocking=True)
                         else:
