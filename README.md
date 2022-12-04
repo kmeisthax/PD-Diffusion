@@ -188,7 +188,7 @@ Once trained you may generate new images with the `unet.test` module:
 python -m PDDiffusion.unet.test --model_dir <name of your model> <output file.png>
 ```
 
-The generated image will be saved to the path you specify.
+The generated image will be saved to the path you specify. If you've trained a conditional U-Net, this command will additionally expect a `--text_prompt` parameter with your actual text.
 
 # Known Issues
 
