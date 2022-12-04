@@ -160,82 +160,84 @@ def load_dataset_with_condition(config, accelerator):
     dataset = Dataset.from_generator(local_wikimedia)
 
     transform = transformer(config.image_size)
-    cond_config = None
 
-    @torch.no_grad()
-    def clip_classify(images):
-        @find_executable_batch_size(starting_batch_size=config.train_batch_size)
-        def inner_batch(batch_size):
-            nonlocal cond_config
+    with torch.no_grad():
+        (cond_processor, cond_model) = load_condition_model_and_processor(config)
+        clip_preprocess = convert_and_augment_pipeline(cond_model.vision_model.config.image_size)
+
+        #Extract the config outside of the batched/no-grad area
+        cond_config = cond_model.config
+
+        def clip_classify(images):
+            nonlocal cond_model
             
-            (cond_processor, cond_model) = load_condition_model_and_processor(config)
             cond_model = accelerator.prepare(cond_model)
-            clip_preprocess = convert_and_augment_pipeline(cond_model.vision_model.config.image_size)
 
-            #Extract the config outside of the batched/no-grad area
-            cond_config = cond_model.config
-            
-            progress_bar = tqdm(total=math.ceil(len(images) / batch_size), disable=not accelerator.is_local_main_process)
-            progress_bar.set_description(f"CLIP Image Processing")
+            @find_executable_batch_size(starting_batch_size=config.train_batch_size)
+            def inner_batch(batch_size):
+                progress_bar = tqdm(total=math.ceil(len(images) / batch_size), disable=not accelerator.is_local_main_process)
+                progress_bar.set_description(f"CLIP Image Processing")
 
-            conditions = []
+                conditions = []
 
-            if str(cond_model.device).startswith("cuda:"):
-                progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
-
-            for i in range(0, len(images), batch_size):
                 if str(cond_model.device).startswith("cuda:"):
                     progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
-                
-                clip_images = [clip_preprocess(Image.open(image["path"]).convert("RGB")) for image in images[i:i+batch_size]]
-                encoded_images = cond_processor(images=clip_images, return_tensors="pt")
-                if cond_model.device != "cpu":
-                    encoded_images.to(cond_model.device)
-                
-                condition = cond_model.visual_projection(cond_model.vision_model(**encoded_images)[1])
 
-                #Don't ask why but there's a normalization step in CLIPModel.
-                #I'd just call into CLIPModel directly but I can't, because it
-                #won't do ONLY text or ONLY images. It wants both.
-                condition = condition / condition.norm(p=2, dim=-1, keepdim=True)
-                condition = condition.to("cpu")
+                for i in range(0, len(images), batch_size):
+                    if str(cond_model.device).startswith("cuda:"):
+                        progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
+                    
+                    clip_images = [clip_preprocess(Image.open(image["path"]).convert("RGB")) for image in images[i:i+batch_size]]
+                    encoded_images = cond_processor(images=clip_images, return_tensors="pt")
+                    if cond_model.device != "cpu":
+                        encoded_images.to(cond_model.device)
+                    
+                    condition = cond_model.visual_projection(cond_model.vision_model(**encoded_images)[1])
 
-                if config.mixed_precision == "fp16":
-                    condition = condition.type(torch.float16)
-                elif config.mixed_precision == "bf16":
-                    condition = condition.type(torch.bfloat16)
+                    #Don't ask why but there's a normalization step in CLIPModel.
+                    #I'd just call into CLIPModel directly but I can't, because it
+                    #won't do ONLY text or ONLY images. It wants both.
+                    condition = condition / condition.norm(p=2, dim=-1, keepdim=True)
+                    condition = condition.to("cpu")
+
+                    if config.mixed_precision == "fp16":
+                        condition = condition.type(torch.float16)
+                    elif config.mixed_precision == "bf16":
+                        condition = condition.type(torch.bfloat16)
+                    else:
+                        condition = condition.type(torch.float32)
+                    
+                    for row in condition:
+                        conditions.append(row)
+                    
+                    progress_bar.update(1)
                 
-                for row in condition:
-                    conditions.append(row)
+                if str(cond_model.device).startswith("cuda:"):
+                    #Fully unload CLIP off the GPU since we won't need it anymore.
+                    torch.cuda.empty_cache()
+                    progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
                 
-                progress_bar.update(1)
+                return {
+                    "image": images,
+                    "condition": conditions
+                }
             
-            if str(cond_model.device).startswith("cuda:"):
-                #Fully unload CLIP off the GPU since we won't need it anymore.
-                torch.cuda.empty_cache()
-                progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
-            
-            return {
-                "image": images,
-                "condition": conditions
-            }
+            return inner_batch()
         
-        return inner_batch()
-    
-    current_fp_type = "float32"
-    if config.mixed_precision == "fp16":
-        current_fp_type = "float16"
-    elif config.mixed_precision == "bf16":
-        current_fp_type = "bfloat16" #TODO: not actually a documented FP type in Huggingface Datasets and I don't have an Ampere GPU to test
-    
-    dataset = dataset.map(clip_classify,
-        input_columns=["image"],
-        batched=True,
-        batch_size=None,
-        features=Features({"condition": [Value(current_fp_type)], "image": DatasetsImage(), "image_file_path": Value("string"), "text": Value("string")}))
-    dataset.set_transform(transform, columns=["image"], output_all_columns=True)
+        current_fp_type = "float32"
+        if config.mixed_precision == "fp16":
+            current_fp_type = "float16"
+        elif config.mixed_precision == "bf16":
+            current_fp_type = "bfloat16" #TODO: not actually a documented FP type in Huggingface Datasets and I don't have an Ampere GPU to test
+        
+        dataset = dataset.map(clip_classify,
+            input_columns=["image"],
+            batched=True,
+            batch_size=None,
+            features=Features({"condition": [Value(current_fp_type)], "image": DatasetsImage(), "image_file_path": Value("string"), "text": Value("string")}))
+        dataset.set_transform(transform, columns=["image"], output_all_columns=True)
 
-    return (dataset, cond_config)
+        return (dataset, cond_config)
 
 def create_model_pipeline(config, accelerator, model, noise_scheduler):
     """Create a model pipeline for evaluation or saving."""
