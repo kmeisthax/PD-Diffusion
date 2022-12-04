@@ -180,7 +180,13 @@ def load_dataset_with_condition(config, accelerator):
 
             conditions = []
 
+            if str(cond_model.device).startswith("cuda:"):
+                progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
+
             for i in range(0, len(images), batch_size):
+                if str(cond_model.device).startswith("cuda:"):
+                    progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
+                
                 clip_images = [clip_preprocess(Image.open(image["path"]).convert("RGB")) for image in images[i:i+batch_size]]
                 encoded_images = cond_processor(images=clip_images, return_tensors="pt")
                 if cond_model.device != "cpu":
@@ -203,6 +209,11 @@ def load_dataset_with_condition(config, accelerator):
                     conditions.append(row)
                 
                 progress_bar.update(1)
+            
+            if str(cond_model.device).startswith("cuda:"):
+                #Fully unload CLIP off the GPU since we won't need it anymore.
+                torch.cuda.empty_cache()
+                progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
             
             return {
                 "image": images,

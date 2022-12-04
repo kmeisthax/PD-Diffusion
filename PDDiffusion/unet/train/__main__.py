@@ -118,6 +118,10 @@ def train_loop(config):
                 
                 progress_bar.update(1)
                 logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step}
+                if str(model.device).startswith("cuda:"):
+                    logs["mem"] = torch.cuda.memory_allocated()
+                    logs["max"] = torch.cuda.max_memory_allocated()
+                
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=global_step)
                 global_step += 1
