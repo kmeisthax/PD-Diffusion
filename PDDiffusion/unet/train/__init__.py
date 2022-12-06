@@ -20,6 +20,7 @@ class TrainingOptions:
     eval_batch_size: int = field(default = 16, metadata={"args": ["--eval_batch_size"], "help": "How many output image samples to generate on a save-image epoch"})
     num_epochs: int = field(default = 50, metadata={"args": ["--num_epochs"], "help": "How many epochs to train for. You can only generate sample images or checkpoint the model at an epoch boundary."})
     gradient_accumulation_steps: int = field(default=1, metadata={"args": ["--gradient_accumulation_steps"]})
+    gradient_checkpointing: bool = field(default=False, metadata={"args": ["--gradient_checkpointing"]})
     learning_rate: float = field(default=1e-4, metadata={"args": ["--learning_rate"]})
     lr_warmup_steps: int = field(default=500, metadata={"args": ["--lr_warmup_steps"]})
 

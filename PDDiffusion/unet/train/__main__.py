@@ -42,6 +42,9 @@ def train_loop(config):
 
         (model, progress) = load_model_and_progress(config, conditional_model_config=cond_model_config)
 
+        if config.gradient_checkpointing:
+            model.enable_gradient_checkpointing()
+
         optimizer = torch.optim.AdamW(
             model.parameters(),
             lr=config.learning_rate,
