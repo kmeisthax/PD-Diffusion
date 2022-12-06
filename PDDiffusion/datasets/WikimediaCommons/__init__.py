@@ -113,6 +113,7 @@ def image_is_valid(file):
         test_image = Image.open(os.path.abspath(file))
         try:
             test_image.load()
+            test_image.close()
 
             return True
         except PIL.UnidentifiedImageError:
@@ -204,6 +205,8 @@ def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted ima
                     image.close()
 
                     file = resized_file
+                else:
+                    image.close()
             
             yield {"image": Image.open(os.path.abspath(file)), "image_file_path": os.path.abspath(file), "text": label}
         else:
