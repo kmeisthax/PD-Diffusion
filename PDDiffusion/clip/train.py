@@ -135,6 +135,8 @@ trainer = Trainer(
         save_steps=config.save_steps,
         save_total_limit=config.save_total_limit,
 
+        per_device_train_batch_size=config.train_batch_size,
+
         # ABSOLUTELY NOT. If you enable this, Trainer will DELETE your entire
         # dataset, and then throw an inscrutible error about invalid keys. Why?
         # Because we had the AUDACITY to use Dataset transforms to add image
