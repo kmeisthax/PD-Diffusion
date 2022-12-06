@@ -185,18 +185,18 @@ def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted ima
             continue
         
         if load_images:
-            if not image_is_valid(file):
-                #Rename the file and its metadata for later inspection
-                os.rename(file, file + '.banned')
-                os.rename(file + '.json', file + '.bannedmetadata')
-
-                continue
-
             #Check if our image has been resized down already, and if so use it.
             resized_file = os.path.join(resize_cache, os.path.basename(file))
             if os.path.exists(resized_file) and image_is_valid(resized_file):
                 file = resized_file
             else:
+                if not image_is_valid(file):
+                    #Rename the file and its metadata for later inspection
+                    os.rename(file, file + '.banned')
+                    os.rename(file + '.json', file + '.bannedmetadata')
+
+                    continue
+                
                 #Otherwise check if this image is too large and if so, downscale.
                 image = Image.open(file)
                 if image.width > intended_maximum_size or image.height > intended_maximum_size:
@@ -208,6 +208,9 @@ def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted ima
                 else:
                     image.close()
             
-            yield {"image": Image.open(os.path.abspath(file)), "image_file_path": os.path.abspath(file), "text": label}
+            image = Image.open(os.path.abspath(file))
+            image.close()
+
+            yield {"image": image, "image_file_path": os.path.abspath(file), "text": label}
         else:
             yield {"text": label}
