@@ -184,7 +184,7 @@ CLIP is a multimodal image and text classifier. It compresses text and images in
 CLIP does not take text or image input directly. Instead, text is *tokenized* and images are *normalized*. For text, we have to pretrain a tokenizer on the text labels in our training set, as such:
 
 ```
-python -m PDDiffusion.clip.tokenize --output_dir <name of your model>
+python -m PDDiffusion.clip.tokenize <name of your model>
 ```
 
 There is currently no step for training the image normalizer from scratch; it only has six parameters (mean/std of R, G, and B) and we use the ones from OpenAI CLIP.
@@ -192,10 +192,10 @@ There is currently no step for training the image normalizer from scratch; it on
 Once CLIP's tokenizer vocabulary has been determined, you can train CLIP itself:
 
 ```
-python -m PDDiffusion.clip.tokenize <name of your model>
+python -m PDDiffusion.clip.train <name of your model>
 ```
 
-Your output directory should be separate from the directory you store your U-Nets.
+Your output directory should be separate from the directory you store your U-Nets and must match the directory you tokenized in.
 
 ### VAE
 
