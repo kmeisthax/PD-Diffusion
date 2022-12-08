@@ -38,7 +38,11 @@ def train_loop(config):
         nonlocal accelerator
         accelerator.free_memory()
 
-        train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        train_dataloader = torch.utils.data.DataLoader(dataset,
+            pin_memory=config.pin_data_in_memory,
+            num_workers = config.data_load_workers,
+            batch_size=batch_size,
+            shuffle=True)
 
         (model, progress) = load_model_and_progress(config, conditional_model_config=cond_model_config)
 

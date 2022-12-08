@@ -24,6 +24,10 @@ class TrainingOptions:
     learning_rate: float = field(default=1e-4, metadata={"args": ["--learning_rate"]})
     lr_warmup_steps: int = field(default=500, metadata={"args": ["--lr_warmup_steps"]})
 
+    #Data load strategy
+    pin_data_in_memory: bool = field(default=False, metadata={"args": ["--pin_data_in_memory"], "help": "Force dataset to remain in CPU memory"})
+    data_load_workers: int = field(default=0, metadata={"args": ["--data_load_workers"], "help": "Number of workers to load data with"})
+
     #Conditional training options
     conditioned_on: str = field(default=None, metadata={"args": ["--conditioned_on"], "help": "Train a conditional model using this CLIP model's space as guidance."})
     evaluation_prompt: str = field(default="a guinea pig", metadata={"args": ["--evaluation_prompt"], "help": "Sample prompt for evaluating a conditional U-Net"})
