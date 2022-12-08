@@ -94,20 +94,20 @@ def load_model_and_progress(config, conditional_model_config=None):
             #This is roughly patterned against the Stable Diffusion ones,
             #though Stable Diffusion works in a latent space and we're not (yet)
             down_block_types=(
-                "CrossAttnDownBlock2D",
-                "CrossAttnDownBlock2D", 
-                "CrossAttnDownBlock2D", 
-                "CrossAttnDownBlock2D", 
-                "DownBlock2D",
+                "DownBlock2D",  # a regular ResNet downsampling block
+                "DownBlock2D", 
+                "DownBlock2D", 
+                "DownBlock2D", 
+                "CrossAttnDownBlock2D",  # a ResNet downsampling block with cross attention
                 "DownBlock2D",
             ), 
             up_block_types= (
-                "UpBlock2D",
-                "UpBlock2D",
-                "CrossAttnUpBlock2D", 
-                "CrossAttnUpBlock2D", 
-                "CrossAttnUpBlock2D", 
-                "CrossAttnUpBlock2D"
+                "UpBlock2D",  # a regular ResNet upsampling block
+                "CrossAttnUpBlock2D",  # a ResNet upsampling block with spatial self-attention
+                "UpBlock2D", 
+                "UpBlock2D", 
+                "UpBlock2D", 
+                "UpBlock2D"  
             ),
             **common_model_settings
         )
