@@ -100,7 +100,7 @@ def extract_information_from_wikitext(wikixml, preferred_lang = "en"):
                 lang_value = [value]
             
             #Now grab the actual data within.
-            info[name] = extract_text_from_language_value(lang_value)
+            info[name.lower()] = extract_text_from_language_value(lang_value)
         
         break
     else:
