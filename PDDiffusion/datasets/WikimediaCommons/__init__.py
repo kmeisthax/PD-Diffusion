@@ -1,5 +1,6 @@
 import requests, urllib.request, glob, os.path, itertools, json, PIL
 from PIL import Image
+from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
 
 LOCAL_STORAGE = os.path.join("sets", "wikimedia")
 LOCAL_RESIZE_CACHE = os.path.join("sets", "wikimedia-cache")
@@ -179,6 +180,36 @@ def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted ima
                         label = label + ", " + extra
                 except:
                     pass
+                
+                for name in metadata_obj["parsetree"]:
+                    xmlstr = metadata_obj["parsetree"][name]
+
+                    try:
+                        extracted = extract_information_from_wikitext(xmlstr, warn=True)
+
+                        #We add in reverse order here to both:
+                        #  - Avoid obliterating data extracted from the terms
+                        #  - Keep the most concise/important data first since CLIP has
+                        #    a maximum token count
+                        if "description" in extracted:
+                            label = extracted["description"] + " " + label
+                        
+                        if "medium" in extracted:
+                            label = extracted["medium"] + " " + label
+                        
+                        if "title" in extracted:
+                            label = extracted["title"] + " " + label
+
+                        if "date" in extracted:
+                            label = extracted["date"] + " " + label
+
+                        if "artist" in extracted:
+                            label = extracted["artist"] + " " + label
+
+                        if "object type" in extracted:
+                            label = extracted["object type"] + " " + label
+                    except Exception as e:
+                        pass
         
         if label is None:
             print ("Warning: Image {} is unlabeled, skipping".format(file))
