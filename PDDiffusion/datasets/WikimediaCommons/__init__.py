@@ -129,7 +129,7 @@ def image_is_valid(file):
         print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
         return False
 
-def local_wikimedia(limit = None, prohibited_categories=["Category:Extracted images", "Category:Cropped images", "Category:Extracted drawings"], load_images=True, intended_maximum_size=512):
+def local_wikimedia(limit = None, prohibited_categories=[], load_images=True, intended_maximum_size=512):
     """Load in training data previously downloaded by running this module's main.
     
     Intended to be used as a Huggingface dataset via:
