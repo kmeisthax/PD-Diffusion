@@ -140,7 +140,8 @@ def load_model_and_progress(config, conditional_model_config=None):
         with open(os.path.join("output", config.output_dir, "progress.json"), "r") as progress_file:
             progress = json.load(progress_file)
     
-    model.set_use_memory_efficient_attention_xformers(True)
+    if isinstance(model, UNet2DConditionModel):
+        model.set_use_memory_efficient_attention_xformers(True)
 
     return (model, progress)
 
