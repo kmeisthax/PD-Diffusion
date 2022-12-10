@@ -462,6 +462,10 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         text_value = "Oil on panel"
     elif subtmpl_title.lower() == "tempera on panel" or subtmpl_title.lower() == "tempera on wood" or subtmpl_title.lower() == "tempera on wood panel":
         text_value = "Tempera on panel"
+    elif subtmpl_title.lower() == "fresco":
+        text_value = "Fresco"
+    elif subtmpl_title.lower() == "oil on copper" or subtmpl_title.lower() == "oil on metal" or subtmpl_title.lower() == "oil on metal plate":
+        text_value = "Oil on copper"
     elif subtmpl_title.lower() == "portrait of male" or subtmpl_title.lower() == "portrait of female" or subtmpl_title.lower() == "portrait of":
         #Portrait-of templates can contain multilingual contents.
         for name_text in params.keys():
