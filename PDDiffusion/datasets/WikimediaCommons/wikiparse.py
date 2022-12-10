@@ -449,7 +449,9 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
 
     params = extract_template_arguments(subtmpl)
     
-    if subtmpl_title.lower().startswith("creator:"):
+    if subtmpl_title.lower() == "information field":
+        pass #Infofields are handled already in the toplevel fn
+    elif subtmpl_title.lower().startswith("creator:"):
         text_value = (text_value + " " + subtmpl_title.removeprefix("Creator:").removeprefix("creator:")).strip()
 
         if len(subtmpl.findall("part")) > 0:
@@ -526,7 +528,7 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
             upper_date = extract_text_from_value(params["2"], warn=warn, preferred_lang="en")
         else:
             if warn:
-                print(f"Missing upper date for between template, lower date is {lower_date}. Fix upstream!")
+                print_warn(f"Missing upper date for between template, lower date is {lower_date}. Fix upstream!")
 
         (lower_date, upper_date) = parse_upper_and_lower_dates(lower_date, upper_date, warn=warn)
 
@@ -573,7 +575,7 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
                 text_value = "; ".join(dimensions)
         else:
             if warn:
-                print("Size template is missing its unit parameter! Fix upstream!")
+                print_warn("Size template is missing its unit parameter! Fix upstream!")
     else:
         if warn:
             print_warn(f"Unknown value template {subtmpl_title}")
@@ -665,6 +667,46 @@ def extract_text_from_value(wikinodes, warn=False, preferred_lang="en"):
     else:
         return ""
 
+def extract_other_fields_from_value(value, warn=False, preferred_lang="en"):
+    """Extract key-value pairs from the "other fields" part of an info/artwork template."""
+    extra_params = {}
+
+    for tmpl in value.findall("template"):
+        title = tmpl.find("title").text.strip()
+        if title.lower() != "information field":
+            continue
+
+        params = extract_template_arguments(tmpl)
+        
+        name = None
+        if "name" in params:
+            name = params["name"]
+        elif "Name" in params:
+            name = params["Name"]
+        elif "1" in params:
+            name = params["1"]
+        
+        value = None
+        if "value" in params:
+            value = params["value"]
+        elif "Value" in params:
+            value = params["Value"]
+        elif "2" in params:
+            value = params["2"]
+
+        name = extract_text_from_value(name, warn=warn, preferred_lang="en") #Name is a key so we need a string.
+        if value is not None:
+            value = extract_text_from_value(value, warn=warn)
+        else:
+            if warn:
+                print_warn(f"Information field {name} is missing its value")
+            
+            value = ""
+        
+        extra_params[name] = [value]
+    
+    return extra_params
+
 def extract_information_from_wikitext(wikixml, warn=False, preferred_lang = "en"):
     """Extract info from a Mediawiki XML parse tree related to a Wikimedia
     Commons submission.
@@ -700,6 +742,11 @@ def extract_information_from_wikitext(wikixml, warn=False, preferred_lang = "en"
 
             name = name.text.strip()
 
+            #Info fields can live anywhere and jump out into the info block
+            extra_fields = extract_other_fields_from_value(value, warn=warn, preferred_lang=preferred_lang)
+            for name in extra_fields.keys():
+                info[name] = extra_fields[name]
+            
             info[name.lower()] = extract_text_from_value(value, warn=warn, preferred_lang=preferred_lang)
         
         break
