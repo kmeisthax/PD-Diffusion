@@ -168,13 +168,22 @@ def evaluate_otherdate(wikinode, warn=False):
         else:
             return (f"from {lower_date.strftime(lower_date_format)}", lower_date)
     elif notation_type.lower() == "~" or notation_type.lower() == "ca" or notation_type.lower() == "circa":
-        (lower_date, lower_date_format) = parse_ymd(lower_date)
-
         if upper_date is not None:
+            (lower_date, lower_date_format) = parse_ymd(lower_date)
+            (upper_date, upper_date_format) = parse_ymd(upper_date)
+
+            return (f"between circa {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
+        elif "-" in lower_date and len(lower_date) == 9:
+            #Some date pairs are in the form of YYYY-YYYY
+            (lower_date, upper_date) = lower_date.split("-")
+
+            (lower_date, lower_date_format) = parse_ymd(lower_date)
             (upper_date, upper_date_format) = parse_ymd(upper_date)
 
             return (f"between circa {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
         else:
+            (lower_date, lower_date_format) = parse_ymd(lower_date)
+            
             return (f"circa {lower_date.strftime(lower_date_format)}", lower_date)
     elif notation_type.lower() == "between":
         (lower_date, lower_date_format) = parse_ymd(lower_date)
@@ -334,7 +343,7 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         text_value = "Madonna and Child"
     elif subtmpl_title.lower() == "unknown":
         text_value = "Unknown"
-        
+
         for part in subtmpl.find("part"):
             value = part.find('value')
 
