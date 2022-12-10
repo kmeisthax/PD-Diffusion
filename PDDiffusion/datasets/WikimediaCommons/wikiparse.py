@@ -321,8 +321,13 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
     elif subtmpl_title.lower() == "madonna and child":
         text_value = "Madonna and Child"
     elif subtmpl_title.lower() == "unknown":
+        text_value = "Unknown"
+        
         for part in subtmpl.find("part"):
-            text_value = f"Unknown {part.find('value').text.strip()}"
+            value = part.find('value')
+
+            if value is not None and value.text is not None:
+                text_value = f"Unknown {part.find('value').text.strip()}"
     elif subtmpl_title.lower() == "other date" or subtmpl_title.lower() == "otherdate":
         text_value = evaluate_otherdate(subtmpl, warn=warn)[0]
     elif subtmpl_title.lower() == "ucfirst:" or subtmpl_title.lower() == "ucfirstletter:":
