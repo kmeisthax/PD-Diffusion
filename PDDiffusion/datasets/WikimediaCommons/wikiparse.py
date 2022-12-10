@@ -83,9 +83,9 @@ def parse_ymd(datestring):
         return (datetime.datetime.strptime(datestring, "%Y-%m-%d"), "%d %B %Y")
     except ValueError:
         try:
-            return datetime.datetime.strptime(datestring, "%Y-%m", "%B %Y")
+            return (datetime.datetime.strptime(datestring, "%Y-%m"), "%B %Y")
         except ValueError:
-            return datetime.datetime.strptime(datestring, "%Y", "%Y")
+            return (datetime.datetime.strptime(datestring, "%Y"), "%Y")
 
 def evaluate_otherdate(wikinode, warn=False):
     """Emulate the 'otherdate' template.
@@ -107,8 +107,8 @@ def evaluate_otherdate(wikinode, warn=False):
     for part in wikinode.findall("part"):
         value = part.find("value").text.strip()
 
-        if "index" in part.find("name"):
-            index = part.find("name").index
+        if "index" in part.find("name").attrib:
+            index = part.find("name").attrib["index"]
 
             if index == "1":
                 notation_type = value
