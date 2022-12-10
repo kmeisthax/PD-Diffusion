@@ -386,6 +386,26 @@ def mapreduce_languages(language_dict, operation):
     
     return parsed_langs
 
+def extract_template_arguments(subtmpl):
+    """Get all the arguments out of a template and put them in a nice dict."""
+    params = {}
+    
+    for part in subtmpl.findall("part"):
+        name = part.find("name")
+        value = part.find("value")
+
+        name_text = name.text
+        if (name.attrib is not None and "index" in name.attrib):
+            name_text = name.attrib["index"]
+        elif name_text is None:
+            name_text = ""
+        else:
+            name_text = name_text.strip()
+        
+        params[name_text] = value
+    
+    return params
+
 def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
     """Given a template tag, extract its value.
     
@@ -421,6 +441,8 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
     #TODO: Actually extract the translations from the templates in
     #question instead of using their English titles
     text_value = ""
+
+    params = extract_template_arguments(subtmpl)
     
     if subtmpl_title.lower().startswith("creator:"):
         text_value = (text_value + " " + subtmpl_title.removeprefix("Creator:").removeprefix("creator:")).strip()
@@ -442,20 +464,9 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         text_value = "Tempera on panel"
     elif subtmpl_title.lower() == "portrait of male" or subtmpl_title.lower() == "portrait of female" or subtmpl_title.lower() == "portrait of":
         #Portrait-of templates can contain multilingual contents.
-        for part in subtmpl.findall("part"):
-            name = part.find("name")
-            value = part.find("value")
-
-            name_text = name.text
-            if (name.attrib is not None and "index" in name.attrib):
-                name_text = name.attrib["index"]
-            elif name_text is None:
-                name_text = ""
-            else:
-                name_text = name_text.strip()
-            
+        for name_text in params.keys():
             if name_text == "1":
-                text_value = extract_text_from_value(value, warn=warn, preferred_lang="en")
+                text_value = extract_text_from_value(params[name_text], warn=warn, preferred_lang="en")
             else:
                 if warn:
                     print_warn(f"Unknown portrait of template parameter {name_text}")
@@ -464,17 +475,8 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
     elif subtmpl_title.lower() == "technique":
         text_value = ""
 
-        for part in subtmpl.findall("part"):
-            name = part.find("name")
-            value = part.find("value")
-
-            name_text = name.text
-            if (name.attrib is not None and "index" in name.attrib):
-                name_text = name.attrib["index"]
-            elif name_text is None:
-                name_text = ""
-            else:
-                name_text = name_text.strip()
+        for name_text in params.keys():
+            value = params[name_text]
 
             if name_text == "1":
                 text_value += extract_text_from_value(value, warn=warn, preferred_lang="en")
@@ -496,16 +498,51 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
     elif subtmpl_title.lower() == "unknown":
         text_value = "Unknown"
         
-        for part in subtmpl.findall("part"):
-            value = part.find('value')
+        for name_text in params.keys():
+            value = params[name_text]
 
             if value is not None and value.text is not None:
-                text_value = f"Unknown {part.find('value').text.strip()}"
+                text_value = f"Unknown {value.text.strip()}"
     elif subtmpl_title.lower() == "other date" or subtmpl_title.lower() == "otherdate":
         text_value = evaluate_otherdate(subtmpl, warn=warn)[0]
     elif subtmpl_title.lower() == "ucfirst:" or subtmpl_title.lower() == "ucfirstletter:":
         #ucfirst actually puts its value in the title, somehow
         text_value = extract_template_tag(subtmpl.find("title").find("template"), warn=warn)
+    elif subtmpl_title.lower() == "size":
+        unit = None
+        if "unit" in params:
+            unit = extract_text_from_value(params["unit"], warn=warn, preferred_lang="en")
+        
+        if "1" in params:
+            unit = extract_text_from_value(params["1"], warn=warn, preferred_lang="en")
+        
+        if unit is not None:
+            dimensions = []
+            #Deprecated dimensional format
+            if "2" in params:
+                dimensions.append(extract_text_from_value(params['2'], warn=warn, preferred_lang='en'))
+
+                if "3" in params:
+                    dimensions.append(extract_text_from_value(params['3'], warn=warn, preferred_lang='en'))
+                
+                if "4" in params:
+                    dimensions.append(extract_text_from_value(params['4'], warn=warn, preferred_lang='en'))
+                
+                text_value = f"{' × '.join(dimensions)} {unit}"
+            else:
+                for name in params.keys():
+                    if name == "unit":
+                        continue
+                    
+                    value = params[name]
+                    value = extract_text_from_value(value, warn=warn, preferred_lang='en')
+                    
+                    dimensions.append(f"{name}: {value} {unit}")
+                
+                text_value = "; ".join(dimensions)
+        else:
+            if warn:
+                print("Size template is missing its unit parameter! Fix upstream!")
     else:
         if warn:
             print_warn(f"Unknown value template {subtmpl_title}")
