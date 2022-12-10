@@ -96,6 +96,12 @@ def extract_text_from_language_value(wikinodes, warn=False):
                     if len(subtmpl.findall("part")) > 0:
                         if warn:
                             print(f"Creator template {true_value} has unknown data")
+                elif subtmpl_title.lower().startswith("institution:"):
+                    true_value = (true_value + " " + subtmpl_title.removeprefix("Institution:").removeprefix("institution:")).strip()
+
+                    if len(subtmpl.findall("part")) > 0:
+                        if warn:
+                            print(f"Institution template {true_value} has unknown data")
                 else:
                     if warn:
                         print(f"Unknown value template {subtmpl_title}")
