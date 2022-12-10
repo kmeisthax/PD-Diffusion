@@ -89,7 +89,10 @@ def extract_text_from_language_value(wikinodes, warn=False):
             if subtmpl.tag == "template":
                 subtmpl_title = subtmpl.find("title").text.strip()
 
-                #Assume that all creator templates do not have data values.
+                #Wikimedia Commons has a large number of templates that exist
+                #purely to translate terms.
+                #TODO: Actually extract the translations from the templates in
+                #question instead of using their English titles
                 if subtmpl_title.lower().startswith("creator:"):
                     true_value = (true_value + " " + subtmpl_title.removeprefix("Creator:").removeprefix("creator:")).strip()
 
@@ -102,6 +105,16 @@ def extract_text_from_language_value(wikinodes, warn=False):
                     if len(subtmpl.findall("part")) > 0:
                         if warn:
                             print(f"Institution template {true_value} has unknown data")
+                elif subtmpl_title.lower() == "Oil on canvas":
+                    true_value = "Oil on canvas"
+                elif subtmpl_title.lower() == "Portrait of male":
+                    true_value = "Portrait of male"
+                elif subtmpl_title.lower() == "Portrait of female":
+                    true_value = "Portrait of female"
+                elif subtmpl_title.lower() == "Portrait of a woman":
+                    true_value = "Portrait of a woman"
+                elif subtmpl_title.lower() == "Madonna and Child":
+                    true_value = "Madonna and Child"
                 else:
                     if warn:
                         print(f"Unknown value template {subtmpl_title}")
