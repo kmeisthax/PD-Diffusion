@@ -1,6 +1,9 @@
 from defusedxml import ElementTree
 import datetime
 
+def print_warn(warning):
+    print(warning.encode())
+
 def extract_languages_from_template(tmpl, warn=False):
     """Given a template element in a parsed wikitext XML file, extract all
     translations in the template's arguments.
@@ -40,13 +43,13 @@ def extract_languages_from_template(tmpl, warn=False):
                     continue
                 else:
                     if warn:
-                        print(f"Unknown title template parameter at index {name.attrib['index']}")
+                        print_warn(f"Unknown title template parameter at index {name.attrib['index']}")
                     
                     continue
             
             if name.text is None:
                 if warn:
-                    print("Skipping malformatted part of title template")
+                    print_warn("Skipping malformatted part of title template")
                 
                 continue
 
@@ -57,10 +60,10 @@ def extract_languages_from_template(tmpl, warn=False):
                 slot1lang = value.text
             elif inner_lang == "translation":
                 if warn:
-                    print("title translation part values not yet supported")
+                    print_warn("title translation part values not yet supported")
             elif inner_lang == "transliteration":
                 if warn:
-                    print("title transliteration part values not yet supported")
+                    print_warn("title transliteration part values not yet supported")
             else:
                 langs[inner_lang] = value
         
@@ -70,7 +73,7 @@ def extract_languages_from_template(tmpl, warn=False):
         for part in tmpl.findall("part"):
             if part.find("name").text is None:
                 if warn:
-                    print("Empty langswitch name, skipping")
+                    print_warn("Empty langswitch name, skipping")
                 
                 continue
 
@@ -81,7 +84,7 @@ def extract_languages_from_template(tmpl, warn=False):
                 langs[inner_lang] = value
             else:
                 if warn:
-                    print(f"LangSwitch parameter {inner_lang} not yet supported")
+                    print_warn(f"LangSwitch parameter {inner_lang} not yet supported")
     elif len(lang) == 2:
         #Single language template, of the form {{lang|1=(language text)}}
         #or {{lang|(language text)}}
@@ -151,12 +154,12 @@ def evaluate_otherdate(wikinode, warn=False):
     for part in wikinode.findall("part"):
         value = part.find("value")
         if value.find("template") is not None:
-            print("Nested otherdate templates are not supported")
+            print_warn("Nested otherdate templates are not supported")
             return ("", )
         
         if value.text is None: #Some templates have empty values
             if warn:
-                print("Otherdate template has empty value, skipping")
+                print_warn("Otherdate template has empty value, skipping")
             continue
         
         value = value.text.strip()
@@ -178,13 +181,13 @@ def evaluate_otherdate(wikinode, warn=False):
     
     if notation_type is None or lower_date is None:
         if warn:
-            print("Otherdate is missing notation type or lower date!")
+            print_warn("Otherdate is missing notation type or lower date!")
         
         return ("",)
 
     if lower_date.endswith("century"): #{{otherdate|2quarter|century|15}}, {{otherdate|1sthalf|15th century}} and the like
         if warn:
-            print("Century otherdates are not supported")
+            print_warn("Century otherdates are not supported")
         
         return ("",)
     
@@ -192,23 +195,23 @@ def evaluate_otherdate(wikinode, warn=False):
         era = "AD"
     
     if warn and era == "BC":
-        print("otherdate BC mode is not fully supported")
+        print_warn("otherdate BC mode is not fully supported")
     
     if lower_date.startswith("("):
         if warn:
-            print(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
+            print_warn(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
         
         lower_date = lower_date.removeprefix("(").strip()
     
     if lower_date.startswith(":"):
         if warn:
-            print(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
+            print_warn(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
         
         lower_date = lower_date.removeprefix(":").strip()
     
     if lower_date.endswith(";"):
         if warn:
-            print(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
+            print_warn(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
         
         lower_date = lower_date.removesuffix(";").strip()
     
@@ -227,7 +230,7 @@ def evaluate_otherdate(wikinode, warn=False):
 
             if int(maybe_upper_date) >= 13:
                 if warn:
-                    print(f"Splitting double-year date {lower_date_emless} to {maybe_lower_date} and {maybe_upper_date}")
+                    print_warn(f"Splitting double-year date {lower_date_emless} to {maybe_lower_date} and {maybe_upper_date}")
                 
                 lower_date = maybe_lower_date
                 upper_date = maybe_upper_date
@@ -389,7 +392,7 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
             return extract_text_from_value(langs[preferred_lang], warn=warn, preferred_lang=preferred_lang)
         else:
             if warn:
-                print(f"Language template is missing preferred language {preferred_lang}")
+                print_warn(f"Language template is missing preferred language {preferred_lang}")
             
             return ""
     
@@ -404,13 +407,13 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
 
         if len(subtmpl.findall("part")) > 0:
             if warn:
-                print(f"Creator template {text_value} has unknown data")
+                print_warn(f"Creator template {text_value} has unknown data")
     elif subtmpl_title.lower().startswith("institution:"):
         text_value = (text_value + " " + subtmpl_title.removeprefix("Institution:").removeprefix("institution:")).strip()
 
         if len(subtmpl.findall("part")) > 0:
             if warn:
-                print(f"Institution template {text_value} has unknown data")
+                print_warn(f"Institution template {text_value} has unknown data")
     elif subtmpl_title.lower() == "oil on canvas":
         text_value = "Oil on canvas"
     elif subtmpl_title.lower() == "oil on panel":
@@ -433,7 +436,7 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
                 text_value = extract_text_from_value(value, warn=warn, preferred_lang="en")
             else:
                 if warn:
-                    print(f"Unknown portrait of template parameter {name_text}")
+                    print_warn(f"Unknown portrait of template parameter {name_text}")
 
         text_value = f"Portrait of {text_value}"
     elif subtmpl_title.lower() == "portrait of a woman":
@@ -455,7 +458,7 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         text_value = extract_template_tag(subtmpl.find("title").find("template"), warn=warn)
     else:
         if warn:
-            print(f"Unknown value template {subtmpl_title}")
+            print_warn(f"Unknown value template {subtmpl_title}")
     
     #This return path is only taken for templates that do not have multiple
     #language values as arguments. They can be translated, but we do not
@@ -493,7 +496,7 @@ def extract_text_from_value(wikinodes, warn=False, preferred_lang="en"):
             value_accum.append(extract_template_tag(lang_value, warn=warn, preferred_lang=preferred_lang))
         else:
             if warn:
-                print(f"Unknown value tag {lang_value.tag}")
+                print_warn(f"Unknown value tag {lang_value.tag}")
         
         if lang_value.tail:
             value_accum.append(lang_value.tail)
@@ -574,7 +577,7 @@ def extract_information_from_wikitext(wikixml, warn=False, preferred_lang = "en"
             
             if name.text is None:
                 if warn:
-                    print("Found a spurious top-level template argument")
+                    print_warn("Found a spurious top-level template argument")
                 continue
 
             name = name.text.strip()
