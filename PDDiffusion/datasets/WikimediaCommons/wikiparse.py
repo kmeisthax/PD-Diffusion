@@ -160,6 +160,12 @@ def evaluate_otherdate(wikinode, warn=False):
             print("Otherdate is missing notation type or lower date!")
         
         return ("",)
+
+    if lower_date == "century": #{{otherdate|2quarter|century|15}} and the like
+        if warn:
+            print("Century otherdates are not supported")
+        
+        return ("",)
     
     if era is None:
         era = "AD"
