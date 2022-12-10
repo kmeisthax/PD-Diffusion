@@ -62,6 +62,12 @@ def extract_languages_from_template(tmpl, warn=False):
             langs[slot1lang] = slot1
     elif lang == "LangSwitch":
         for part in tmpl.findall("part"):
+            if part.find("name").text is None:
+                if warn:
+                    print("Empty langswitch name, skipping")
+                
+                continue
+
             inner_lang = part.find("name").text.strip()
             value = part.find("value")
 
@@ -183,7 +189,7 @@ def evaluate_otherdate(wikinode, warn=False):
             return (f"between circa {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
         else:
             (lower_date, lower_date_format) = parse_ymd(lower_date)
-            
+
             return (f"circa {lower_date.strftime(lower_date_format)}", lower_date)
     elif notation_type.lower() == "between":
         (lower_date, lower_date_format) = parse_ymd(lower_date)
