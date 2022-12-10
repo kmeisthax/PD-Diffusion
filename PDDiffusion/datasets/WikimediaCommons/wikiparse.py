@@ -214,7 +214,8 @@ def evaluate_otherdate(wikinode, warn=False):
     
     #Some dates are in YYYY-YYYY format without being split into two template parameters.
     #or YYYY–YYYY format, or YYYY—YYYY format. YES THOSE ARE ALL DIFFERENT CHARACTERS
-    lower_date_emless = lower_date.replace("–", "-").replace("—", "-")
+    #Someone also used YYYY\YYYY format
+    lower_date_emless = lower_date.replace("–", "-").replace("—", "-").replace("\\", "-")
     if upper_date is None and '-' in lower_date_emless:
         #TODO: This introduces upper dates to formats that don't expect them.
         #They will be dropped for now
