@@ -190,10 +190,12 @@ def evaluate_otherdate(wikinode, warn=False):
         return ("",)
     
     #Some dates are in YYYY-YYYY format without being split into two template parameters.
-    if upper_date is None and '-' in lower_date:
+    #or YYYY–YYYY format
+    lower_date_emless = lower_date.replace("–", "-")
+    if upper_date is None and '-' in lower_date_emless:
         #TODO: This introduces upper dates to formats that don't expect them.
         #They will be dropped for now
-        (lower_date, upper_date) = lower_date.split("-")
+        (lower_date, upper_date) = lower_date_emless.split("-")
     
     if notation_type.lower() == "islamic":
         #Islamic dates store the Gregorian equivalent in the lower slot and the
