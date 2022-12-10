@@ -133,7 +133,12 @@ def evaluate_otherdate(wikinode, warn=False):
     era = None
 
     for part in wikinode.findall("part"):
-        value = part.find("value").text.strip()
+        value = part.find("value")
+        if value.find("template") is not None:
+            print("Nested otherdate templates are not supported")
+            return ("", )
+
+        value = value.text.strip()
 
         if "index" in part.find("name").attrib:
             index = part.find("name").attrib["index"]
