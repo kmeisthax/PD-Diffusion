@@ -60,13 +60,15 @@ def extract_languages_from_template(tmpl, warn=False):
                     print(f"LangSwitch parameter {inner_lang} not yet supported")
     elif len(lang) == 2:
         #Single language template, of the form {{lang|1=(language text)}}
+        #or {{lang|(language text)}}
         for part in tmpl.findall("part"):
             name = part.find("name")
-            if "index" not in name or name.index != "1":
-                continue
-            
-            langs[lang] = part.find("value")
-            break
+            if name.text is not None and name.text.strip() == "1":
+                langs[lang] = part.find("value")
+                break
+            elif "index" in name.attrib and name.attrib["index"] == "1":
+                langs[lang] = part.find("value")
+                break
     else: #Non-language template
         return None
     
