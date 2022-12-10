@@ -193,6 +193,8 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
                         parsed_langs[lang] = this_lang_value["*"]
                     else: #Language switched in template
                         parsed_langs[thislang] = this_lang_value[thislang]
+            
+            return parsed_langs
         elif preferred_lang in langs:
             #NOTE: This may fail in the case of badly nested language templates.
             #For example, {{ja |1= {{en |1=hello}}}} is a valid template
