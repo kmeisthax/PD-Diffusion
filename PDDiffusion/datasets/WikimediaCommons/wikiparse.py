@@ -204,7 +204,7 @@ def evaluate_otherdate(wikinode, warn=False):
             (upper_date, upper_date_format) = parse_ymd(upper_date)
 
             return (f"between circa {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
-        elif "-" in lower_date and len(lower_date) == 9:
+        elif "-" in lower_date:
             #Some date pairs are in the form of YYYY-YYYY
             (lower_date, upper_date) = lower_date.split("-")
 
@@ -217,9 +217,16 @@ def evaluate_otherdate(wikinode, warn=False):
 
             return (f"circa {lower_date.strftime(lower_date_format)}", lower_date)
     elif notation_type.lower() == "between":
-        (lower_date, lower_date_format) = parse_ymd(lower_date)
-
         if upper_date is not None:
+            (lower_date, lower_date_format) = parse_ymd(lower_date)
+            (upper_date, upper_date_format) = parse_ymd(upper_date)
+
+            return (f"between {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
+        elif "-" in lower_date:
+            #Some date pairs are in the form of YYYY-YYYY
+            (lower_date, upper_date) = lower_date.split("-")
+
+            (lower_date, lower_date_format) = parse_ymd(lower_date)
             (upper_date, upper_date_format) = parse_ymd(upper_date)
 
             return (f"between {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
