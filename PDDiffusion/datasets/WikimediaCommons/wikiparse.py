@@ -195,13 +195,19 @@ def evaluate_otherdate(wikinode, warn=False):
         if warn:
             print(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
         
-        lower_date = lower_date.removeprefix("(")
+        lower_date = lower_date.removeprefix("(").strip()
+    
+    if lower_date.startswith(":"):
+        if warn:
+            print(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
+        
+        lower_date = lower_date.removeprefix(":").strip()
     
     if lower_date.endswith(";"):
         if warn:
             print(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
         
-        lower_date = lower_date.removesuffix(";")
+        lower_date = lower_date.removesuffix(";").strip()
     
     #Some dates are in YYYY-YYYY format without being split into two template parameters.
     #or YYYY–YYYY format, or YYYY—YYYY format. YES THOSE ARE ALL DIFFERENT CHARACTERS
