@@ -512,6 +512,12 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
 
             if value is not None and value.text is not None:
                 text_value = f"Unknown {value.text.strip()}"
+    elif subtmpl_title.lower() == "own":
+        text_value = "Own work"
+    elif subtmpl_title.lower() == "own photo" or subtmpl_title.lower() == "self-photographed":
+        text_value = "Self-photographed"
+    elif subtmpl_title.lower() == "own work by original uploader":
+        text_value = "Own work by the original uploader"
     elif subtmpl_title.lower() == "between":
         lower_date = extract_text_from_value(params["1"], warn=warn, preferred_lang="en")
         upper_date = None
