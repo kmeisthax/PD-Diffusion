@@ -165,6 +165,51 @@ def evaluate_otherdate(wikinode, warn=False):
         
         return ("")
 
+def extract_nonlanguage_template_tag(subtmpl, warn=False):
+    subtmpl_title = subtmpl.find("title").text.strip()
+    true_value = ""
+
+    #Wikimedia Commons has a large number of templates that exist
+    #purely to translate terms.
+    #TODO: Actually extract the translations from the templates in
+    #question instead of using their English titles
+    if subtmpl_title.lower().startswith("creator:"):
+        true_value = (true_value + " " + subtmpl_title.removeprefix("Creator:").removeprefix("creator:")).strip()
+
+        if len(subtmpl.findall("part")) > 0:
+            if warn:
+                print(f"Creator template {true_value} has unknown data")
+    elif subtmpl_title.lower().startswith("institution:"):
+        true_value = (true_value + " " + subtmpl_title.removeprefix("Institution:").removeprefix("institution:")).strip()
+
+        if len(subtmpl.findall("part")) > 0:
+            if warn:
+                print(f"Institution template {true_value} has unknown data")
+    elif subtmpl_title.lower() == "oil on canvas":
+        true_value = "Oil on canvas"
+    elif subtmpl_title.lower() == "oil on panel":
+        true_value = "Oil on panel"
+    elif subtmpl_title.lower() == "portrait of male":
+        true_value = "Portrait of male"
+    elif subtmpl_title.lower() == "portrait of female":
+        true_value = "Portrait of female"
+    elif subtmpl_title.lower() == "portrait of a woman":
+        true_value = "Portrait of a woman"
+    elif subtmpl_title.lower() == "madonna and child":
+        true_value = "Madonna and Child"
+    elif subtmpl_title.lower() == "unknown":
+        for part in subtmpl.find("part"):
+            true_value = f"Unknown {part.find('value').text.strip()}"
+    elif subtmpl_title.lower() == "other date" or subtmpl_title.lower() == "otherdate":
+        true_value = evaluate_otherdate(subtmpl, warn=warn)[0]
+    elif subtmpl_title.lower() == "ucfirst:" or subtmpl_title.lower() == "ucfirstletter:":
+        #ucfirst actually puts its value in the title, somehow
+        true_value = extract_nonlanguage_template_tag(subtmpl.find("title").find("template"), warn=warn)
+    else:
+        if warn:
+            print(f"Unknown value template {subtmpl_title}")
+    
+    return true_value
 
 def extract_text_from_language_value(wikinodes, warn=False):
     """Given a list of language values, extract all relevant text.
@@ -182,44 +227,7 @@ def extract_text_from_language_value(wikinodes, warn=False):
         # Then check for other template types.
         for subtmpl in lang_value:
             if subtmpl.tag == "template":
-                subtmpl_title = subtmpl.find("title").text.strip()
-
-                #Wikimedia Commons has a large number of templates that exist
-                #purely to translate terms.
-                #TODO: Actually extract the translations from the templates in
-                #question instead of using their English titles
-                if subtmpl_title.lower().startswith("creator:"):
-                    true_value = (true_value + " " + subtmpl_title.removeprefix("Creator:").removeprefix("creator:")).strip()
-
-                    if len(subtmpl.findall("part")) > 0:
-                        if warn:
-                            print(f"Creator template {true_value} has unknown data")
-                elif subtmpl_title.lower().startswith("institution:"):
-                    true_value = (true_value + " " + subtmpl_title.removeprefix("Institution:").removeprefix("institution:")).strip()
-
-                    if len(subtmpl.findall("part")) > 0:
-                        if warn:
-                            print(f"Institution template {true_value} has unknown data")
-                elif subtmpl_title.lower() == "oil on canvas":
-                    true_value = "Oil on canvas"
-                elif subtmpl_title.lower() == "oil on panel":
-                    true_value = "Oil on panel"
-                elif subtmpl_title.lower() == "portrait of male":
-                    true_value = "Portrait of male"
-                elif subtmpl_title.lower() == "portrait of female":
-                    true_value = "Portrait of female"
-                elif subtmpl_title.lower() == "portrait of a woman":
-                    true_value = "Portrait of a woman"
-                elif subtmpl_title.lower() == "madonna and child":
-                    true_value = "Madonna and Child"
-                elif subtmpl_title.lower() == "unknown":
-                    for part in subtmpl.find("part"):
-                        true_value = f"Unknown {part.find('value').text.strip()}"
-                elif subtmpl_title.lower() == "other date" or subtmpl_title.lower() == "otherdate":
-                    true_value = evaluate_otherdate(subtmpl, warn=warn)[0]
-                else:
-                    if warn:
-                        print(f"Unknown value template {subtmpl_title}")
+                true_value = extract_nonlanguage_template_tag(subtmpl, warn=warn)
             else:
                 if warn:
                     print(f"Unknown value tag {subtmpl.tag}")
