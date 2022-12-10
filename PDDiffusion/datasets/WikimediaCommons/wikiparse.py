@@ -219,6 +219,13 @@ def evaluate_otherdate(wikinode, warn=False):
                 lower_date = maybe_lower_date
                 upper_date = maybe_upper_date
     
+    #Sup dawg, I heard you like ambiguity
+    if lower_date.startswith("c. "):
+        lower_date = lower_date.removeprefix("c. ")
+    
+    if upper_date is not None and upper_date.startswith("c. "):
+        upper_date = upper_date.removeprefix("c. ")
+    
     if notation_type.lower() == "islamic":
         #Islamic dates store the Gregorian equivalent in the lower slot and the
         #Islamic calendar original in the upper
