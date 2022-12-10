@@ -192,7 +192,13 @@ def evaluate_otherdate(wikinode, warn=False):
         if warn:
             print(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
         
-        return ("",)
+        lower_date = lower_date.removeprefix("(")
+    
+    if lower_date.endswith(";"):
+        if warn:
+            print(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
+        
+        lower_date = lower_date.removesuffix(";")
     
     #Some dates are in YYYY-YYYY format without being split into two template parameters.
     #or YYYY–YYYY format
