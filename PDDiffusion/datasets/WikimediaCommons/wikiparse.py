@@ -576,6 +576,11 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         else:
             if warn:
                 print_warn("Size template is missing its unit parameter! Fix upstream!")
+    elif subtmpl_title.lower() == "geographicus-link":
+        value = extract_text_from_value(params["1"], warn=warn, preferred_lang='en')
+        text_value = f"Geographicus link {value}"
+    elif subtmpl_title.lower() == "geographicus-source":
+        text_value = f"This file was provided to Wikimedia Commons by Geographicus Rare Antique Maps, a specialist dealer in rare maps and other cartography of the 15th, 16th, 17th, 18th and 19th centuries, as part of a cooperation project."
     else:
         if warn:
             print_warn(f"Unknown value template {subtmpl_title}")
