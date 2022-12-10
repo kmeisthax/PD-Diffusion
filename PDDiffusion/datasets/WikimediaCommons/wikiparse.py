@@ -109,21 +109,24 @@ def parse_ymd(datestring):
         return (datetime.datetime.strptime(datestring, "%Y-%m-%d"), "%d %B %Y")
     except ValueError:
         try:
-            return (datetime.datetime.strptime(datestring, "%Y-%m"), "%B %Y")
+            return (datetime.datetime.strptime(datestring, "%d %B %Y"), "%d %B %Y")
         except ValueError:
             try:
-                return (datetime.datetime.strptime(datestring, "%Y"), "%Y")
+                return (datetime.datetime.strptime(datestring, "%Y-%m"), "%B %Y")
             except ValueError:
-                if "/" in datestring: #1735/36 style ambiguous dates
-                    #TODO: We don't support date ranges, so just lop everything off
-                    datestring = datestring.split("/")[0]
-                
-                if datestring.endswith("s"): #1700s style ambiguous dates
-                    #TODO: This should be a date range, too
-                    datestring = datestring[:-1]
+                try:
+                    return (datetime.datetime.strptime(datestring, "%Y"), "%Y")
+                except ValueError:
+                    if "/" in datestring: #1735/36 style ambiguous dates
+                        #TODO: We don't support date ranges, so just lop everything off
+                        datestring = datestring.split("/")[0]
+                    
+                    if datestring.endswith("s"): #1700s style ambiguous dates
+                        #TODO: This should be a date range, too
+                        datestring = datestring[:-1]
 
-                #Datetime chokes on years before 1000 AD
-                return (datetime.datetime(int(datestring), 1, 1), "%Y")
+                    #Datetime chokes on years before 1000 AD
+                    return (datetime.datetime(int(datestring), 1, 1), "%Y")
 
 def evaluate_otherdate(wikinode, warn=False):
     """Emulate the 'otherdate' template.
