@@ -163,7 +163,7 @@ def evaluate_otherdate(wikinode, warn=False):
 
             return (f"between circa {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
         else:
-            return (f"between circa {lower_date.strftime(lower_date_format)}", lower_date)
+            return (f"circa {lower_date.strftime(lower_date_format)}", lower_date)
     elif notation_type.lower() == "between":
         (lower_date, lower_date_format) = parse_ymd(lower_date)
 
@@ -191,6 +191,60 @@ def evaluate_otherdate(wikinode, warn=False):
             return (f"{lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
         else:
             return (f"{lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "by":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"by {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "from":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"from {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "until":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"until {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "before" or notation_type.lower() == "b" or notation_type.lower() == "<":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"before {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "after" or notation_type.lower() == "a" or notation_type.lower() == ">":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"after {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "spring":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"Spring {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "summer":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"Summer {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "fall" or notation_type.lower() == "autumn":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"Autumn {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "winter":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"Winter {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "beginning" or notation_type.lower() == "early":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"early {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "mid" or notation_type.lower() == "middle":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"mid {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "end" or notation_type.lower() == "late":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"late {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "firsthalf" or notation_type.lower() == "1half" or notation_type.lower() == "1sthalf" or notation_type.lower() == "first half" or notation_type.lower() == "1st half":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"first half of {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "secondhalf" or notation_type.lower() == "2half" or notation_type.lower() == "2ndhalf" or notation_type.lower() == "second half" or notation_type.lower() == "2nd half":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"second half of {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "1quarter" or notation_type.lower() == "quarter1" or notation_type.lower() == "1stquarter" or notation_type.lower() == "1st quarter":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"first quarter of {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "2quarter" or notation_type.lower() == "quarter2" or notation_type.lower() == "2ndquarter" or notation_type.lower() == "2nd quarter":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"second quarter of {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "3quarter" or notation_type.lower() == "quarter3" or notation_type.lower() == "3rdquarter" or notation_type.lower() == "3rd quarter":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"third quarter of {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "4quarter" or notation_type.lower() == "quarter4" or notation_type.lower() == "4thquarter" or notation_type.lower() == "4th quarter":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+        return (f"fourth quarter of {lower_date.strftime(lower_date_format)}", lower_date)
     else:
         if warn:
             print (f"Unsupported otherdate notation {notation_type}")
