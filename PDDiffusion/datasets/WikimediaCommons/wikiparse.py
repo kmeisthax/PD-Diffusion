@@ -43,6 +43,12 @@ def extract_languages_from_template(tmpl, warn=False):
                         print(f"Unknown title template parameter at index {name.attrib['index']}")
                     
                     continue
+            
+            if name.text is None:
+                if warn:
+                    print("Skipping malformatted part of title template")
+                
+                continue
 
             inner_lang = name.text.strip()
             if inner_lang == "1":
