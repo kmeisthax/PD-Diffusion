@@ -438,6 +438,8 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         text_value = "Oil on canvas"
     elif subtmpl_title.lower() == "oil on panel":
         text_value = "Oil on panel"
+    elif subtmpl_title.lower() == "tempera on panel" or subtmpl_title.lower() == "tempera on wood" or subtmpl_title.lower() == "tempera on wood panel":
+        text_value = "Tempera on panel"
     elif subtmpl_title.lower() == "portrait of male" or subtmpl_title.lower() == "portrait of female" or subtmpl_title.lower() == "portrait of":
         #Portrait-of templates can contain multilingual contents.
         for part in subtmpl.findall("part"):
@@ -487,6 +489,10 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         text_value = "Portrait of a woman"
     elif subtmpl_title.lower() == "madonna and child":
         text_value = "Madonna and Child"
+    elif subtmpl_title.lower() == "and" or subtmpl_title.lower() == "Conj-and":
+        text_value = "and"
+    elif subtmpl_title.lower() == "drawing":
+        text_value = "drawing"
     elif subtmpl_title.lower() == "unknown":
         text_value = "Unknown"
         
