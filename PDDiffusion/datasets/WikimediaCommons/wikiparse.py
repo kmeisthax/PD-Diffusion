@@ -353,8 +353,8 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         text_value = "Madonna and Child"
     elif subtmpl_title.lower() == "unknown":
         text_value = "Unknown"
-
-        for part in subtmpl.find("part"):
+        
+        for part in subtmpl.findall("part"):
             value = part.find('value')
 
             if value is not None and value.text is not None:
