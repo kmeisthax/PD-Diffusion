@@ -101,6 +101,54 @@ def extract_languages_from_template(tmpl, warn=False):
     
     return langs
 
+def parse_upper_and_lower_dates(lower_date, upper_date, warn=False):
+    if lower_date.startswith("("):
+        if warn:
+            print_warn(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
+        
+        lower_date = lower_date.removeprefix("(").strip()
+    
+    if lower_date.startswith(":"):
+        if warn:
+            print_warn(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
+        
+        lower_date = lower_date.removeprefix(":").strip()
+    
+    if lower_date.endswith(";"):
+        if warn:
+            print_warn(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
+        
+        lower_date = lower_date.removesuffix(";").strip()
+    
+    #Some dates are in YYYY-YYYY format without being split into two template parameters.
+    #or YYYY–YYYY format, or YYYY—YYYY format. YES THOSE ARE ALL DIFFERENT CHARACTERS
+    #Someone also used YYYY\YYYY format
+    lower_date_emless = lower_date.replace("–", "-").replace("—", "-").replace("\\", "-")
+    if upper_date is None and '-' in lower_date_emless:
+        #TODO: This introduces upper dates to formats that don't expect them.
+        #They will be dropped for now
+        lower_date_split = lower_date_emless.split("-")
+
+        #Avoid trying to cut dates in YYYY-MM-DD or YYYY-MM format
+        if len(lower_date_split) == 2:
+            (maybe_lower_date, maybe_upper_date) = lower_date_split
+
+            if int(maybe_upper_date) >= 13:
+                if warn:
+                    print_warn(f"Splitting double-year date {lower_date_emless} to {maybe_lower_date} and {maybe_upper_date}")
+                
+                lower_date = maybe_lower_date
+                upper_date = maybe_upper_date
+    
+    #Sup dawg, I heard you like ambiguity
+    if lower_date.startswith("c."):
+        lower_date = lower_date.removeprefix("c.").strip()
+    
+    if upper_date is not None and upper_date.startswith("c."):
+        upper_date = upper_date.removeprefix("c.").strip()
+    
+    return (lower_date, upper_date)
+
 def parse_ymd(datestring):
     """Attempt to parse a date that may be missing a month or day number.
     
@@ -196,51 +244,8 @@ def evaluate_otherdate(wikinode, warn=False):
     
     if warn and era == "BC":
         print_warn("otherdate BC mode is not fully supported")
-    
-    if lower_date.startswith("("):
-        if warn:
-            print_warn(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
-        
-        lower_date = lower_date.removeprefix("(").strip()
-    
-    if lower_date.startswith(":"):
-        if warn:
-            print_warn(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
-        
-        lower_date = lower_date.removeprefix(":").strip()
-    
-    if lower_date.endswith(";"):
-        if warn:
-            print_warn(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
-        
-        lower_date = lower_date.removesuffix(";").strip()
-    
-    #Some dates are in YYYY-YYYY format without being split into two template parameters.
-    #or YYYY–YYYY format, or YYYY—YYYY format. YES THOSE ARE ALL DIFFERENT CHARACTERS
-    #Someone also used YYYY\YYYY format
-    lower_date_emless = lower_date.replace("–", "-").replace("—", "-").replace("\\", "-")
-    if upper_date is None and '-' in lower_date_emless:
-        #TODO: This introduces upper dates to formats that don't expect them.
-        #They will be dropped for now
-        lower_date_split = lower_date_emless.split("-")
 
-        #Avoid trying to cut dates in YYYY-MM-DD or YYYY-MM format
-        if len(lower_date_split) == 2:
-            (maybe_lower_date, maybe_upper_date) = lower_date_split
-
-            if int(maybe_upper_date) >= 13:
-                if warn:
-                    print_warn(f"Splitting double-year date {lower_date_emless} to {maybe_lower_date} and {maybe_upper_date}")
-                
-                lower_date = maybe_lower_date
-                upper_date = maybe_upper_date
-    
-    #Sup dawg, I heard you like ambiguity
-    if lower_date.startswith("c."):
-        lower_date = lower_date.removeprefix("c.").strip()
-    
-    if upper_date is not None and upper_date.startswith("c."):
-        upper_date = upper_date.removeprefix("c.").strip()
+    (lower_date, upper_date) = parse_upper_and_lower_dates(lower_date, upper_date, warn=warn)
     
     if notation_type.lower() == "islamic":
         #Islamic dates store the Gregorian equivalent in the lower slot and the
@@ -507,6 +512,22 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
 
             if value is not None and value.text is not None:
                 text_value = f"Unknown {value.text.strip()}"
+    elif subtmpl_title.lower() == "between":
+        lower_date = extract_text_from_value(params["1"], warn=warn, preferred_lang="en")
+        upper_date = None
+
+        if "2" in params:
+            upper_date = extract_text_from_value(params["2"], warn=warn, preferred_lang="en")
+        else:
+            if warn:
+                print(f"Missing upper date for between template, lower date is {lower_date}. Fix upstream!")
+
+        (lower_date, upper_date) = parse_upper_and_lower_dates(lower_date, upper_date, warn=warn)
+
+        lower_date = parse_ymd(lower_date)[0]
+        upper_date = parse_ymd(upper_date)[0]
+        
+        text_value = f"from {lower_date} to {upper_date}"
     elif subtmpl_title.lower() == "other date" or subtmpl_title.lower() == "otherdate":
         text_value = evaluate_otherdate(subtmpl, warn=warn)[0]
     elif subtmpl_title.lower() == "ucfirst:" or subtmpl_title.lower() == "ucfirstletter:":
