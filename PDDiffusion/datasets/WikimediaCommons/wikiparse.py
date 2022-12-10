@@ -128,7 +128,7 @@ def evaluate_otherdate(wikinode, warn=False):
         if warn:
             print("Otherdate is missing notation type or lower date!")
         
-        return ("")
+        return ("",)
     
     if era is None:
         era = "AD"
@@ -165,7 +165,7 @@ def evaluate_otherdate(wikinode, warn=False):
         if warn:
             print (f"Unsupported otherdate notation {notation_type}")
         
-        return ("")
+        return ("",)
 
 def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
     """Given a template tag, extract its value.
