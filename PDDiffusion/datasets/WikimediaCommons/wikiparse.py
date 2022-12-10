@@ -30,9 +30,21 @@ def extract_languages_from_template(tmpl, warn=False):
         slot1lang = None
 
         for part in tmpl.findall("part"):
-            inner_lang = part.find("name").text.strip()
+            name = part.find("name")
             value = part.find("value")
 
+            #Slot 1 can either be by index or by keyword
+            if name.text is None and "index" in name.attrib:
+                if name.attrib["index"] == "1":
+                    slot1 = value
+                    continue
+                else:
+                    if warn:
+                        print(f"Unknown title template parameter at index {name.attrib['index']}")
+                    
+                    continue
+
+            inner_lang = name.text.strip()
             if inner_lang == "1":
                 slot1 = value
             elif inner_lang == "lang":
