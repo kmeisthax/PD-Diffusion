@@ -415,10 +415,27 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         text_value = "Oil on canvas"
     elif subtmpl_title.lower() == "oil on panel":
         text_value = "Oil on panel"
-    elif subtmpl_title.lower() == "portrait of male":
-        text_value = "Portrait of male"
-    elif subtmpl_title.lower() == "portrait of female":
-        text_value = "Portrait of female"
+    elif subtmpl_title.lower() == "portrait of male" or subtmpl_title.lower() == "portrait of female":
+        #Portrait-of templates can contain multilingual contents.
+        for part in subtmpl.findall("part"):
+            name = part.find("name")
+            value = part.find("value")
+
+            name_text = name.text
+            if (name.attrib is not None and "index" in name.attrib):
+                name_text = name.attrib["index"]
+            elif name_text is None:
+                name_text = ""
+            else:
+                name_text = name_text.strip()
+            
+            if name_text == "1":
+                text_value = extract_text_from_value(value, warn=warn, preferred_lang="en")
+            else:
+                if warn:
+                    print(f"Unknown portrait of template parameter {name_text}")
+
+        text_value = f"Portrait of {text_value}"
     elif subtmpl_title.lower() == "portrait of a woman":
         text_value = "Portrait of a woman"
     elif subtmpl_title.lower() == "madonna and child":
