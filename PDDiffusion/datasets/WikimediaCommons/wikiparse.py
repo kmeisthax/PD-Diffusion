@@ -1,18 +1,66 @@
 from defusedxml import ElementTree
 
-def extract_languages_from_wikinode(wikinode):
+def extract_languages_from_wikinode(wikinode, warn=False):
     """Given a node in a parsed wikitext XML file, find all language template
-    invocations in the value.
+    invocations in the value and return them.
     
     This does not consider nested template invocations or templates buried in
-    other styling."""
+    other styling.
+    
+    Wikimedia Commons has several forms of multilingual data:
+    
+     * ISO language code templates for individual language/value pairs
+     * LangSwitch, which stores multiple languages and values (and, in
+       MediaWiki, renders a LANGuage SWITCHer).
+     * title and other templates which are intended to render values, but are
+       also multilingual."""
 
     langs = {}
 
     for tmpl in wikinode.findall("template"):
         lang = tmpl.find("title").text.strip()
+        
+        if lang == "title":
+            slot1 = None
+            slot1lang = None
 
-        #We currently assume all two-letter templates are language codes.
+            for part in tmpl.findall("part"):
+                inner_lang = part.find("name").text.strip()
+                value = part.find("value")
+
+                if inner_lang == "1":
+                    slot1 = value
+                elif inner_lang == "lang":
+                    slot1lang = value.text
+                elif inner_lang == "translation":
+                    if warn:
+                        print("title translation part values not yet supported")
+                elif inner_lang == "transliteration":
+                    if warn:
+                        print("title transliteration part values not yet supported")
+                else:
+                    langs[inner_lang] = value
+            
+            if slot1lang is not None and slot1 is not None:
+                langs[slot1lang] = slot1
+            
+            continue
+        
+        if lang == "LangSwitch":
+            for part in tmpl.findall("part"):
+                inner_lang = part.find("name").text.strip()
+                value = part.find("value")
+
+                if len(inner_lang) == 2:
+                    langs[inner_lang] = value
+                else:
+                    if warn:
+                        print(f"LangSwitch parameter {inner_lang} not yet supported")
+            
+            continue
+
+        #We've accounted for all the 'special' templates, the rest is just
+        #langcode templates.
         if len(lang) != 2:
             continue
 
@@ -61,7 +109,7 @@ def extract_text_from_language_value(wikinodes, warn=False):
     return true_value.strip()
 
 
-def extract_information_from_wikitext(wikixml, preferred_lang = "en"):
+def extract_information_from_wikitext(wikixml, warn=False, preferred_lang = "en"):
     """Extract info from a Mediawiki XML parse tree related to a Wikimedia
     Commons submission."""
 
@@ -87,7 +135,7 @@ def extract_information_from_wikitext(wikixml, preferred_lang = "en"):
 
             # First, check if our value has language templates.
             # If so, pick out one.
-            langs = extract_languages_from_wikinode(value)
+            langs = extract_languages_from_wikinode(value, warn=warn)
             lang_value = None
             if len(langs) > 0:
                 if preferred_lang in langs:
@@ -100,7 +148,7 @@ def extract_information_from_wikitext(wikixml, preferred_lang = "en"):
                 lang_value = [value]
             
             #Now grab the actual data within.
-            info[name.lower()] = extract_text_from_language_value(lang_value)
+            info[name.lower()] = extract_text_from_language_value(lang_value, warn=warn)
         
         break
     else:
