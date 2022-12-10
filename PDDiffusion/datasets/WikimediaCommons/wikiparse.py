@@ -176,7 +176,7 @@ def evaluate_otherdate(wikinode, warn=False):
         
         return ("",)
 
-    if lower_date == "century": #{{otherdate|2quarter|century|15}} and the like
+    if lower_date.endswith("century"): #{{otherdate|2quarter|century|15}}, {{otherdate|1sthalf|15th century}} and the like
         if warn:
             print("Century otherdates are not supported")
         
@@ -200,7 +200,18 @@ def evaluate_otherdate(wikinode, warn=False):
     if upper_date is None and '-' in lower_date_emless:
         #TODO: This introduces upper dates to formats that don't expect them.
         #They will be dropped for now
-        (lower_date, upper_date) = lower_date_emless.split("-")
+        lower_date_split = lower_date_emless.split("-")
+
+        #Avoid trying to cut dates in YYYY-MM-DD or YYYY-MM format
+        if len(lower_date_split) == 2:
+            (maybe_lower_date, maybe_upper_date) = lower_date_split
+
+            if int(maybe_upper_date) >= 13:
+                if warn:
+                    print(f"Splitting double-year date {lower_date_emless} to {maybe_lower_date} and {maybe_upper_date}")
+                
+                lower_date = maybe_lower_date
+                upper_date = maybe_upper_date
     
     if notation_type.lower() == "islamic":
         #Islamic dates store the Gregorian equivalent in the lower slot and the
