@@ -357,6 +357,35 @@ def evaluate_otherdate(wikinode, warn=False):
         
         return ("",)
 
+def mapreduce_languages(language_dict, operation):
+    """Given a set of language values, do something to each language, which may
+    or may not introduce more languages.
+    
+    The operation parameter will be called with the language value, plus the
+    code for the value given. It may return either a string (mapping the value
+    one-to-one per language) or another language dict. Nested language dicts
+    are flattened to allow the operation to change the language provided,
+    expose a child multilanguage dictionary, or indicate that it does not know
+    the language of the text inside."""
+
+    parsed_langs = {}
+
+    for lang in language_dict.keys():
+        this_lang_value = operation(language_dict[lang], lang)
+        
+        if type(this_lang_value) is dict:
+            #Since templates are recursive they may also nest language
+            #definitions. This is rare, but let's account for it!
+            for thislang in this_lang_value.keys():
+                if thislang == "*": #Unknown/any language
+                    parsed_langs[lang] = this_lang_value["*"]
+                else: #Language switched in template
+                    parsed_langs[thislang] = this_lang_value[thislang]
+        else:
+            parsed_langs[lang] = this_lang_value
+    
+    return parsed_langs
+
 def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
     """Given a template tag, extract its value.
     
@@ -370,31 +399,22 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
     langs = extract_languages_from_template(subtmpl, warn=warn)
     if langs is not None:
         #Each language itself is a template value which we need to reparse.
-        if preferred_lang is None:
-            parsed_langs = {}
+        #Language content may either be an unknown language (which we pass
+        #through) or it may change inside of other templates.
+        langs = mapreduce_languages(langs, lambda value, _: extract_text_from_value(value, warn=warn, preferred_lang=preferred_lang))
 
-            for lang in langs.keys():
-                this_lang_value = extract_text_from_value(langs[lang], warn=warn, preferred_lang=preferred_lang)
-
-                #Since templates are recursive they may also nest language
-                #definitions. This is rare, but let's account for it!
-                for thislang in this_lang_value.keys():
-                    if thislang == "*": #Unknown/any language
-                        parsed_langs[lang] = this_lang_value["*"]
-                    else: #Language switched in template
-                        parsed_langs[thislang] = this_lang_value[thislang]
-            
-            return parsed_langs
-        elif preferred_lang in langs:
-            #NOTE: This may fail in the case of badly nested language templates.
-            #For example, {{ja |1= {{en |1=hello}}}} is a valid template
-            #construction, but we won't visit the English tag here.
-            return extract_text_from_value(langs[preferred_lang], warn=warn, preferred_lang=preferred_lang)
+        if preferred_lang is not None:
+            if preferred_lang in langs:
+                return langs[preferred_lang]
+            elif "*" in langs:
+                return langs["*"]
+            else:
+                if warn:
+                    print_warn(f"Language template is missing preferred language {preferred_lang}")
+                
+                return ""
         else:
-            if warn:
-                print_warn(f"Language template is missing preferred language {preferred_lang}")
-            
-            return ""
+            return langs
     
     #Wikimedia Commons has a large number of templates that exist purely to
     #translate terms. We call these "non-language templates".
