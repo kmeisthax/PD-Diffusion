@@ -542,8 +542,15 @@ def extract_information_from_wikitext(wikixml, warn=False, preferred_lang = "en"
             continue
 
         for part in tmpl.findall("part"):
-            name = part.find("name").text.strip()
+            name = part.find("name")
             value = part.find("value")
+            
+            if name.text is None:
+                if warn:
+                    print("Found a spurious top-level template argument")
+                continue
+
+            name = name.text.strip()
 
             info[name.lower()] = extract_text_from_value(value, warn=warn, preferred_lang=preferred_lang)
         
