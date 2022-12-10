@@ -117,6 +117,10 @@ def parse_ymd(datestring):
                 if "/" in datestring: #1735/36 style ambiguous dates
                     #TODO: We don't support date ranges, so just lop everything off
                     datestring = datestring.split("/")[0]
+                
+                if datestring.endswith("s"): #1700s style ambiguous dates
+                    #TODO: This should be a date range, too
+                    datestring = datestring[:-1]
 
                 #Datetime chokes on years before 1000 AD
                 return (datetime.datetime(int(datestring), 1, 1), "%Y")
