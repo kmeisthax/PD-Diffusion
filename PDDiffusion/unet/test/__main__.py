@@ -2,13 +2,16 @@ from PDDiffusion.unet.test import load_pretrained_pipeline_into_accelerator
 from dataclasses import field
 from argparse_dataclass import dataclass
 from accelerate import Accelerator
-import sys, torch, os.path
+from PIL import Image
+import sys, torch, os.path, math
 
 @dataclass
 class GenerationOptions:
     output: str = field(metadata={"args": ["output"]})
     model_dir: str = field(default='pd-diffusion', metadata={"args": ["--model_dir"]})
     text_prompt: str = field(default=None, metadata={"args": ["--text_prompt"], "help": "The text prompt to use for conditional models."})
+
+    num_images: int = field(default=1, metadata={"args": ["--num_images"], "help": "Number of images to generate."})
     seed: int = None
 
 options = GenerationOptions.parse_args(sys.argv[1:])
@@ -34,6 +37,13 @@ if is_conditional:
 elif not is_conditional and options.text_prompt is not None:
     raise Exception("Attempting to use unconditional pipeline with a text prompt.")
 
-image = pipeline(**pipeline_args).images[0]
+pipeline_args["batch_size"] = options.num_images
+square_size = math.ceil(math.sqrt(options.num_images))
 
-image.save(options.output)
+images = pipeline(**pipeline_args).images
+
+target_image = Image.new('RGBA', size=(images[0].size[0] * square_size, images[0].size[1] * square_size))
+for i, image in enumerate(images):
+    target_image.paste(image.convert("RGBA"), box=(i%square_size * image.size[0], i//square_size * image.size[1]))
+
+target_image.save(options.output)
