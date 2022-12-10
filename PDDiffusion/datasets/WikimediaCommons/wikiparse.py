@@ -179,6 +179,12 @@ def evaluate_otherdate(wikinode, warn=False):
     if warn and era == "BC":
         print("otherdate BC mode is not fully supported")
     
+    if lower_date.startswith("("):
+        if warn:
+            print(f"first otherdate parameter {lower_date} is misformatted, please edit upstream")
+        
+        return ("",)
+    
     if notation_type.lower() == "islamic":
         #Islamic dates store the Gregorian equivalent in the lower slot and the
         #Islamic calendar original in the upper
