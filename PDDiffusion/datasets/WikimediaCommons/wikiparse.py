@@ -202,6 +202,8 @@ def extract_text_from_language_value(wikinodes, warn=False):
                             print(f"Institution template {true_value} has unknown data")
                 elif subtmpl_title.lower() == "oil on canvas":
                     true_value = "Oil on canvas"
+                elif subtmpl_title.lower() == "oil on panel":
+                    true_value = "Oil on panel"
                 elif subtmpl_title.lower() == "portrait of male":
                     true_value = "Portrait of male"
                 elif subtmpl_title.lower() == "portrait of female":
