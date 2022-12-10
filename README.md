@@ -258,3 +258,29 @@ Note: Since all our examples recommend the use of a virtual environment, you sti
 You're on Windows. PyTorch ships with code that assumes Unix signals are available in defaults.
 
 Manually corehack the offending `file_based_local_timer.py` file in your virtual environment to use SIGTERM by default instead.
+
+## Directory does not appear to have a file named preprocessor_config.json
+
+This error happens when you try to train conditional U-Nets against a partially-saved CLIP. It happens because I haven't yet gotten the tokenizer to spit out the vision side of the CLIP configuration. In the meantime, you can copy this from OpenAI's CLIP, since it's identical to the defaults in Huggingface and not copyrightable.
+
+```
+{
+  "crop_size": 224,
+  "do_center_crop": true,
+  "do_normalize": true,
+  "do_resize": true,
+  "feature_extractor_type": "CLIPFeatureExtractor",
+  "image_mean": [
+    0.48145466,
+    0.4578275,
+    0.40821073
+  ],
+  "image_std": [
+    0.26862954,
+    0.26130258,
+    0.27577711
+  ],
+  "resample": 3,
+  "size": 224
+}
+```
