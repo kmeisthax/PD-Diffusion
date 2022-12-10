@@ -185,6 +185,12 @@ def evaluate_otherdate(wikinode, warn=False):
         
         return ("",)
     
+    #Some dates are in YYYY-YYYY format without being split into two template parameters.
+    if upper_date is None and '-' in lower_date:
+        #TODO: This introduces upper dates to formats that don't expect them.
+        #They will be dropped for now
+        (lower_date, upper_date) = lower_date.split("-")
+    
     if notation_type.lower() == "islamic":
         #Islamic dates store the Gregorian equivalent in the lower slot and the
         #Islamic calendar original in the upper
@@ -205,34 +211,18 @@ def evaluate_otherdate(wikinode, warn=False):
         else:
             return (f"from {lower_date.strftime(lower_date_format)}", lower_date)
     elif notation_type.lower() == "~" or notation_type.lower() == "ca" or notation_type.lower() == "circa":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+
         if upper_date is not None:
-            (lower_date, lower_date_format) = parse_ymd(lower_date)
-            (upper_date, upper_date_format) = parse_ymd(upper_date)
-
-            return (f"between circa {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
-        elif "-" in lower_date:
-            #Some date pairs are in the form of YYYY-YYYY
-            (lower_date, upper_date) = lower_date.split("-")
-
-            (lower_date, lower_date_format) = parse_ymd(lower_date)
             (upper_date, upper_date_format) = parse_ymd(upper_date)
 
             return (f"between circa {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
         else:
-            (lower_date, lower_date_format) = parse_ymd(lower_date)
-
             return (f"circa {lower_date.strftime(lower_date_format)}", lower_date)
     elif notation_type.lower() == "between":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+
         if upper_date is not None:
-            (lower_date, lower_date_format) = parse_ymd(lower_date)
-            (upper_date, upper_date_format) = parse_ymd(upper_date)
-
-            return (f"between {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
-        elif "-" in lower_date:
-            #Some date pairs are in the form of YYYY-YYYY
-            (lower_date, upper_date) = lower_date.split("-")
-
-            (lower_date, lower_date_format) = parse_ymd(lower_date)
             (upper_date, upper_date_format) = parse_ymd(upper_date)
 
             return (f"between {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
