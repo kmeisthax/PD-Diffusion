@@ -210,6 +210,9 @@ def extract_text_from_language_value(wikinodes, warn=False):
                     true_value = "Portrait of a woman"
                 elif subtmpl_title.lower() == "Madonna and Child":
                     true_value = "Madonna and Child"
+                elif subtmpl_title.lower() == "unknown":
+                    for part in subtmpl.find("part"):
+                        true_value = f"Unknown {part.find('value').text.strip()}"
                 elif subtmpl_title.lower() == "other date" or subtmpl_title.lower() == "otherdate":
                     true_value = evaluate_otherdate(subtmpl, warn=warn)[0]
                 else:
