@@ -415,7 +415,7 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         text_value = "Oil on canvas"
     elif subtmpl_title.lower() == "oil on panel":
         text_value = "Oil on panel"
-    elif subtmpl_title.lower() == "portrait of male" or subtmpl_title.lower() == "portrait of female":
+    elif subtmpl_title.lower() == "portrait of male" or subtmpl_title.lower() == "portrait of female" or subtmpl_title.lower() == "portrait of":
         #Portrait-of templates can contain multilingual contents.
         for part in subtmpl.findall("part"):
             name = part.find("name")
