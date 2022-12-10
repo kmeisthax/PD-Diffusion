@@ -133,6 +133,9 @@ def evaluate_otherdate(wikinode, warn=False):
     if era is None:
         era = "AD"
     
+    if warn and era == "BC":
+        print("otherdate BC mode is not fully supported")
+    
     if notation_type.lower() == "islamic":
         #Islamic dates store the Gregorian equivalent in the lower slot and the
         #Islamic calendar original in the upper
@@ -158,9 +161,36 @@ def evaluate_otherdate(wikinode, warn=False):
         if upper_date is not None:
             (upper_date, upper_date_format) = parse_ymd(upper_date)
 
-            return (f"from {lower_date.strftime(lower_date_format)} until {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
+            return (f"between circa {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
         else:
-            return (f"from {lower_date.strftime(lower_date_format)}", lower_date)
+            return (f"between circa {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "between":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+
+        if upper_date is not None:
+            (upper_date, upper_date_format) = parse_ymd(upper_date)
+
+            return (f"between {lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
+        else:
+            return (f"between {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "or":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+
+        if upper_date is not None:
+            (upper_date, upper_date_format) = parse_ymd(upper_date)
+
+            return (f"{lower_date.strftime(lower_date_format)} or {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
+        else:
+            return (f"{lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "and" or notation_type.lower() == "&":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+
+        if upper_date is not None:
+            (upper_date, upper_date_format) = parse_ymd(upper_date)
+
+            return (f"{lower_date.strftime(lower_date_format)} and {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
+        else:
+            return (f"{lower_date.strftime(lower_date_format)}", lower_date)
     else:
         if warn:
             print (f"Unsupported otherdate notation {notation_type}")
