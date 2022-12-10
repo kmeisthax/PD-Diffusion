@@ -1,6 +1,6 @@
 from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
 from PDDiffusion.datasets.WikimediaCommons import LOCAL_STORAGE
-import itertools, glob, os, json
+import itertools, glob, os, json, sys
 
 report = []
 
@@ -13,6 +13,9 @@ for file in itertools.chain(
     ):
     
     if os.path.exists(file + ".json"):
+        #Get around the fact that input redirection appears to change text encoding.
+        print(file.encode("utf-8"))
+
         with open(file + ".json", 'r') as metadata_file:
             metadata = json.load(metadata_file)
 
