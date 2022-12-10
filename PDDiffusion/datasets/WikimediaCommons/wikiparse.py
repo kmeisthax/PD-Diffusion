@@ -200,15 +200,15 @@ def extract_text_from_language_value(wikinodes, warn=False):
                     if len(subtmpl.findall("part")) > 0:
                         if warn:
                             print(f"Institution template {true_value} has unknown data")
-                elif subtmpl_title.lower() == "Oil on canvas":
+                elif subtmpl_title.lower() == "oil on canvas":
                     true_value = "Oil on canvas"
-                elif subtmpl_title.lower() == "Portrait of male":
+                elif subtmpl_title.lower() == "portrait of male":
                     true_value = "Portrait of male"
-                elif subtmpl_title.lower() == "Portrait of female":
+                elif subtmpl_title.lower() == "portrait of female":
                     true_value = "Portrait of female"
-                elif subtmpl_title.lower() == "Portrait of a woman":
+                elif subtmpl_title.lower() == "portrait of a woman":
                     true_value = "Portrait of a woman"
-                elif subtmpl_title.lower() == "Madonna and Child":
+                elif subtmpl_title.lower() == "madonna and child":
                     true_value = "Madonna and Child"
                 elif subtmpl_title.lower() == "unknown":
                     for part in subtmpl.find("part"):
