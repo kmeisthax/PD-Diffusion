@@ -105,7 +105,11 @@ def parse_ymd(datestring):
         try:
             return (datetime.datetime.strptime(datestring, "%Y-%m"), "%B %Y")
         except ValueError:
-            return (datetime.datetime.strptime(datestring, "%Y"), "%Y")
+            try:
+                return (datetime.datetime.strptime(datestring, "%Y"), "%Y")
+            except ValueError:
+                #Datetime chokes on years before 1000 AD
+                return (datetime.datetime(int(datestring), 1, 1), "%Y")
 
 def evaluate_otherdate(wikinode, warn=False):
     """Emulate the 'otherdate' template.
