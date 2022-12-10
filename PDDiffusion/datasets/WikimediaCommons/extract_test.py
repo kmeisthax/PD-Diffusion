@@ -25,11 +25,12 @@ for file in itertools.chain(
                 xmlstr = metadata["parsetree"][name]
 
                 try:
-                    extracted = extract_information_from_wikitext(xmlstr, warn=True)
+                    extracted = extract_information_from_wikitext(xmlstr, warn=True, preferred_lang=None)
 
                     parses[name] = {
                         "status": "valid",
-                        "data": extracted
+                        "data": extracted,
+                        "en_only": extract_information_from_wikitext(xmlstr, warn=True, preferred_lang="en")
                     }
                 except Exception as e:
                     parses[name] = {

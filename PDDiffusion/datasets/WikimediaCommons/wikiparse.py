@@ -1,12 +1,17 @@
 from defusedxml import ElementTree
 import datetime
 
-def extract_languages_from_wikinode(wikinode, warn=False):
-    """Given a node in a parsed wikitext XML file, find all language template
-    invocations in the value and return them.
+def extract_languages_from_template(tmpl, warn=False):
+    """Given a template element in a parsed wikitext XML file, extract all
+    translations in the template's arguments.
+
+    If the template does not contain translation arguments (either because the
+    term is not translatable or because the template is supposed to translate
+    things internally), this returns None.
     
-    This does not consider nested template invocations or templates buried in
-    other styling.
+    Dict values will be XML nodes - specifically, <value> tags potentially
+    containing other templates inside. Nested template invocations will need to
+    be considered separately.
     
     Wikimedia Commons has several forms of multilingual data:
     
@@ -18,57 +23,52 @@ def extract_languages_from_wikinode(wikinode, warn=False):
 
     langs = {}
 
-    for tmpl in wikinode.findall("template"):
-        lang = tmpl.find("title").text.strip()
-        
-        if lang == "title":
-            slot1 = None
-            slot1lang = None
-
-            for part in tmpl.findall("part"):
-                inner_lang = part.find("name").text.strip()
-                value = part.find("value")
-
-                if inner_lang == "1":
-                    slot1 = value
-                elif inner_lang == "lang":
-                    slot1lang = value.text
-                elif inner_lang == "translation":
-                    if warn:
-                        print("title translation part values not yet supported")
-                elif inner_lang == "transliteration":
-                    if warn:
-                        print("title transliteration part values not yet supported")
-                else:
-                    langs[inner_lang] = value
-            
-            if slot1lang is not None and slot1 is not None:
-                langs[slot1lang] = slot1
-            
-            continue
-        
-        if lang == "LangSwitch":
-            for part in tmpl.findall("part"):
-                inner_lang = part.find("name").text.strip()
-                value = part.find("value")
-
-                if len(inner_lang) == 2:
-                    langs[inner_lang] = value
-                else:
-                    if warn:
-                        print(f"LangSwitch parameter {inner_lang} not yet supported")
-            
-            continue
-
-        #We've accounted for all the 'special' templates, the rest is just
-        #langcode templates.
-        if len(lang) != 2:
-            continue
-
-        langs[lang] = []
+    lang = tmpl.find("title").text.strip()
+    
+    if lang == "title":
+        slot1 = None
+        slot1lang = None
 
         for part in tmpl.findall("part"):
-            langs[lang].append(part.find("value"))
+            inner_lang = part.find("name").text.strip()
+            value = part.find("value")
+
+            if inner_lang == "1":
+                slot1 = value
+            elif inner_lang == "lang":
+                slot1lang = value.text
+            elif inner_lang == "translation":
+                if warn:
+                    print("title translation part values not yet supported")
+            elif inner_lang == "transliteration":
+                if warn:
+                    print("title transliteration part values not yet supported")
+            else:
+                langs[inner_lang] = value
+        
+        if slot1lang is not None and slot1 is not None:
+            langs[slot1lang] = slot1
+    elif lang == "LangSwitch":
+        for part in tmpl.findall("part"):
+            inner_lang = part.find("name").text.strip()
+            value = part.find("value")
+
+            if len(inner_lang) == 2:
+                langs[inner_lang] = value
+            else:
+                if warn:
+                    print(f"LangSwitch parameter {inner_lang} not yet supported")
+    elif len(lang) == 2:
+        #Single language template, of the form {{lang|1=(language text)}}
+        for part in tmpl.findall("part"):
+            name = part.find("name")
+            if "index" not in name or name.index != "1":
+                continue
+            
+            langs[lang] = part.find("value")
+            break
+    else: #Non-language template
+        return None
     
     return langs
 
@@ -165,82 +165,179 @@ def evaluate_otherdate(wikinode, warn=False):
         
         return ("")
 
-def extract_nonlanguage_template_tag(subtmpl, warn=False):
+def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
+    """Given a template tag, extract its value.
+    
+    If this template is a language tag, the preferred language value will be
+    extracted from it, unless preferred_lang is None, in which case all lang
+    values will be returned as a dict.
+    
+    If the preferred language is not available, this returns the empty string."""
     subtmpl_title = subtmpl.find("title").text.strip()
-    true_value = ""
 
-    #Wikimedia Commons has a large number of templates that exist
-    #purely to translate terms.
+    langs = extract_languages_from_template(subtmpl, warn=warn)
+    if langs is not None:
+        #Each language itself is a template value which we need to reparse.
+        if preferred_lang is None:
+            parsed_langs = {}
+
+            for lang in langs.keys():
+                this_lang_value = extract_text_from_value(langs[lang], warn=warn, preferred_lang=preferred_lang)
+
+                #Since templates are recursive they may also nest language
+                #definitions. This is rare, but let's account for it!
+                for thislang in this_lang_value.keys():
+                    if thislang == "*": #Unknown/any language
+                        parsed_langs[lang] = this_lang_value["*"]
+                    else: #Language switched in template
+                        parsed_langs[thislang] = this_lang_value[thislang]
+        elif preferred_lang in langs:
+            #NOTE: This may fail in the case of badly nested language templates.
+            #For example, {{ja |1= {{en |1=hello}}}} is a valid template
+            #construction, but we won't visit the English tag here.
+            return extract_text_from_value(langs[preferred_lang], warn=warn, preferred_lang=preferred_lang)
+        else:
+            if warn:
+                print(f"Language template is missing preferred language {preferred_lang}")
+            
+            return ""
+    
+    #Wikimedia Commons has a large number of templates that exist purely to
+    #translate terms. We call these "non-language templates".
     #TODO: Actually extract the translations from the templates in
     #question instead of using their English titles
+    text_value = ""
+    
     if subtmpl_title.lower().startswith("creator:"):
-        true_value = (true_value + " " + subtmpl_title.removeprefix("Creator:").removeprefix("creator:")).strip()
+        text_value = (text_value + " " + subtmpl_title.removeprefix("Creator:").removeprefix("creator:")).strip()
 
         if len(subtmpl.findall("part")) > 0:
             if warn:
-                print(f"Creator template {true_value} has unknown data")
+                print(f"Creator template {text_value} has unknown data")
     elif subtmpl_title.lower().startswith("institution:"):
-        true_value = (true_value + " " + subtmpl_title.removeprefix("Institution:").removeprefix("institution:")).strip()
+        text_value = (text_value + " " + subtmpl_title.removeprefix("Institution:").removeprefix("institution:")).strip()
 
         if len(subtmpl.findall("part")) > 0:
             if warn:
-                print(f"Institution template {true_value} has unknown data")
+                print(f"Institution template {text_value} has unknown data")
     elif subtmpl_title.lower() == "oil on canvas":
-        true_value = "Oil on canvas"
+        text_value = "Oil on canvas"
     elif subtmpl_title.lower() == "oil on panel":
-        true_value = "Oil on panel"
+        text_value = "Oil on panel"
     elif subtmpl_title.lower() == "portrait of male":
-        true_value = "Portrait of male"
+        text_value = "Portrait of male"
     elif subtmpl_title.lower() == "portrait of female":
-        true_value = "Portrait of female"
+        text_value = "Portrait of female"
     elif subtmpl_title.lower() == "portrait of a woman":
-        true_value = "Portrait of a woman"
+        text_value = "Portrait of a woman"
     elif subtmpl_title.lower() == "madonna and child":
-        true_value = "Madonna and Child"
+        text_value = "Madonna and Child"
     elif subtmpl_title.lower() == "unknown":
         for part in subtmpl.find("part"):
-            true_value = f"Unknown {part.find('value').text.strip()}"
+            text_value = f"Unknown {part.find('value').text.strip()}"
     elif subtmpl_title.lower() == "other date" or subtmpl_title.lower() == "otherdate":
-        true_value = evaluate_otherdate(subtmpl, warn=warn)[0]
+        text_value = evaluate_otherdate(subtmpl, warn=warn)[0]
     elif subtmpl_title.lower() == "ucfirst:" or subtmpl_title.lower() == "ucfirstletter:":
         #ucfirst actually puts its value in the title, somehow
-        true_value = extract_nonlanguage_template_tag(subtmpl.find("title").find("template"), warn=warn)
+        text_value = extract_template_tag(subtmpl.find("title").find("template"), warn=warn)
     else:
         if warn:
             print(f"Unknown value template {subtmpl_title}")
     
-    return true_value
-
-def extract_text_from_language_value(wikinodes, warn=False):
-    """Given a list of language values, extract all relevant text.
+    #This return path is only taken for templates that do not have multiple
+    #language values as arguments. They can be translated, but we do not
+    #currently support translating them, so they will always be returned as
+    #English language strings.
+    if preferred_lang is None:
+        return {"en": text_value}
+    elif preferred_lang != "en":
+        #Since we don't translate non-language templates ourselves, they will
+        #be omitted from all non-English output
+        return ""
     
-    See `extract_languages_from_wikinode for how to select one language from an
-    Information template value. Alternatively, if your template value does not
-    have language templates in it, you may provide the whole value wrapped in a
-    one element list."""
-    true_value = ""
+    return text_value
 
+def extract_text_from_value(wikinodes, warn=False, preferred_lang="en"):
+    """Given a value tag, extract all relevant text in a given language.
+    
+    If preferred_lang is None, then all languages will be extracted as a dict.
+    Otherwise, extracted text will be returned as a string.
+    
+    Template values that do not have language tags will be marked with the
+    special language "*" which means any language."""
+
+    #Format of value_accum: Strings for untranslated text, dicts for translated
+    #text (in preferred_lang=None mode). Everything has implicit spaces
+    #surrounding it.
+    value_accum = []
+
+    #First, extract EVERYTHING WE CAN into the accumulator
+    if wikinodes.text:
+        value_accum.append(wikinodes.text)
+    
     for lang_value in wikinodes:
-        if lang_value.text:
-            true_value = (true_value + " " + lang_value.text).strip()
-
-        # Then check for other template types.
-        for subtmpl in lang_value:
-            if subtmpl.tag == "template":
-                true_value = extract_nonlanguage_template_tag(subtmpl, warn=warn)
-            else:
-                if warn:
-                    print(f"Unknown value tag {subtmpl.tag}")
-            
-            if subtmpl.tail:
-                true_value = (true_value + " " + subtmpl.tail).strip()
+        if lang_value.tag == "template":
+            value_accum.append(extract_template_tag(lang_value, warn=warn, preferred_lang=preferred_lang))
+        else:
+            if warn:
+                print(f"Unknown value tag {lang_value.tag}")
+        
+        if lang_value.tail:
+            value_accum.append(lang_value.tail)
     
-    return true_value.strip()
+    #Now, we need to produce a list of languages to extract.
+    target_langs = set()
+    if preferred_lang is None:
+        for value in value_accum:
+            if type(value) is dict:
+                for lang in value.keys():
+                    target_langs.add(lang)
+    else:
+        target_langs.add(preferred_lang)
+    
+    #Failsafe: If we didn't find any language tags inside, report the value as
+    #unknown.
+    if len(target_langs) == 0:
+        true_value = ""
 
+        for value in value_accum:
+            #We don't bother with dicts since they're already empty
+            if type(value) is str:
+                true_value = true_value + " " + value
+        
+        if preferred_lang is None:
+            return {"*": true_value.strip()}
+        else:
+            return true_value.strip()
+
+    #Finally, extract each language value separately.
+    lang_values = {}
+
+    for lang in target_langs:
+        true_value = ""
+
+        for value in value_accum:
+            if type(value) is dict and lang in value:
+                true_value = true_value + " " + value[lang]
+            elif type(value) is str:
+                true_value = true_value + " " + value
+        
+        lang_values[lang] = true_value.strip()
+    
+    if preferred_lang is None:
+        return lang_values
+    elif preferred_lang in lang_values:
+        return lang_values[preferred_lang]
+    else:
+        return ""
 
 def extract_information_from_wikitext(wikixml, warn=False, preferred_lang = "en"):
     """Extract info from a Mediawiki XML parse tree related to a Wikimedia
-    Commons submission."""
+    Commons submission.
+    
+    All strings will be in the preferred language (if multiple translations are
+    available. You may instead set preferred_lang to None if you want all
+    available translation strings."""
 
     tree = ElementTree.fromstring(wikixml)
 
@@ -262,22 +359,7 @@ def extract_information_from_wikitext(wikixml, warn=False, preferred_lang = "en"
             name = part.find("name").text.strip()
             value = part.find("value")
 
-            # First, check if our value has language templates.
-            # If so, pick out one.
-            langs = extract_languages_from_wikinode(value, warn=warn)
-            lang_value = None
-            if len(langs) > 0:
-                if preferred_lang in langs:
-                    lang_value = langs[preferred_lang]
-                else:
-                    for lang in langs:
-                        lang_value = langs[lang]
-                        break
-            else:
-                lang_value = [value]
-            
-            #Now grab the actual data within.
-            info[name.lower()] = extract_text_from_language_value(lang_value, warn=warn)
+            info[name.lower()] = extract_text_from_value(value, warn=warn, preferred_lang=preferred_lang)
         
         break
     else:
