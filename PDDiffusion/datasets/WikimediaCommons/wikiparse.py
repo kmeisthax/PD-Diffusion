@@ -1,4 +1,5 @@
 from defusedxml import ElementTree
+import datetime
 
 def extract_languages_from_wikinode(wikinode, warn=False):
     """Given a node in a parsed wikitext XML file, find all language template
@@ -71,6 +72,100 @@ def extract_languages_from_wikinode(wikinode, warn=False):
     
     return langs
 
+def parse_ymd(datestring):
+    """Attempt to parse a date that may be missing a month or day number.
+    
+    Also returns a corresponding format string that prints out the provided
+    fields as otherdate would print them in English.
+    
+    TODO: BC/AD"""
+    try:
+        return (datetime.datetime.strptime(datestring, "%Y-%m-%d"), "%d %B %Y")
+    except ValueError:
+        try:
+            return datetime.datetime.strptime(datestring, "%Y-%m", "%B %Y")
+        except ValueError:
+            return datetime.datetime.strptime(datestring, "%Y", "%Y")
+
+def evaluate_otherdate(wikinode, warn=False):
+    """Emulate the 'otherdate' template.
+
+    `wikinode` should be the otherdate template.
+    
+    Returns a list of up to three values: the text string itself, then era
+    (BC/AD), plus up to two date strings in the value.
+    
+    Note: this only works for English language values.
+    Also note: This only returns Gregorian dates, even if the original template
+    value had other calendar dates in it."""
+
+    notation_type = None
+    lower_date = None
+    upper_date = None
+    era = None
+
+    for part in wikinode.findall("part"):
+        value = part.find("value").text.strip()
+
+        if "index" in part.find("name"):
+            index = part.find("name").index
+
+            if index == "1":
+                notation_type = value
+            elif index == "2":
+                lower_date = value
+            elif index == "3":
+                upper_date = value
+        else:
+            argname = part.find("name").text.strip()
+
+            if argname == "era":
+                era = value
+    
+    if notation_type is None or lower_date is None:
+        if warn:
+            print("Otherdate is missing notation type or lower date!")
+        
+        return ("")
+    
+    if era is None:
+        era = "AD"
+    
+    if notation_type.lower() == "islamic":
+        #Islamic dates store the Gregorian equivalent in the lower slot and the
+        #Islamic calendar original in the upper
+
+        if upper_date is not None:
+            #TODO: convert BC/AD to BH/AH
+            #NOTE: We do not yield the Islamic equivalent, just the Gregorian date
+            return (f"{lower_date} ({upper_date})", era, parse_ymd(lower_date)[0])
+        else:
+            return (f"{lower_date}", era, parse_ymd(lower_date)[0])
+    elif notation_type.lower() == "-" or notation_type.lower() == "from-until":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+
+        if upper_date is not None:
+            (upper_date, upper_date_format) = parse_ymd(upper_date)
+
+            return (f"from {lower_date.strftime(lower_date_format)} until {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
+        else:
+            return (f"from {lower_date.strftime(lower_date_format)}", lower_date)
+    elif notation_type.lower() == "~" or notation_type.lower() == "ca" or notation_type.lower() == "circa":
+        (lower_date, lower_date_format) = parse_ymd(lower_date)
+
+        if upper_date is not None:
+            (upper_date, upper_date_format) = parse_ymd(upper_date)
+
+            return (f"from {lower_date.strftime(lower_date_format)} until {upper_date.strftime(upper_date_format)}", lower_date, upper_date)
+        else:
+            return (f"from {lower_date.strftime(lower_date_format)}", lower_date)
+    else:
+        if warn:
+            print (f"Unsupported otherdate notation {notation_type}")
+        
+        return ("")
+
+
 def extract_text_from_language_value(wikinodes, warn=False):
     """Given a list of language values, extract all relevant text.
     
@@ -115,6 +210,8 @@ def extract_text_from_language_value(wikinodes, warn=False):
                     true_value = "Portrait of a woman"
                 elif subtmpl_title.lower() == "Madonna and Child":
                     true_value = "Madonna and Child"
+                elif subtmpl_title.lower() == "other date" or subtmpl_title.lower() == "otherdate":
+                    true_value = evaluate_otherdate(subtmpl, warn=warn)[0]
                 else:
                     if warn:
                         print(f"Unknown value template {subtmpl_title}")
