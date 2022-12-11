@@ -225,7 +225,8 @@ def evaluate_otherdate(wikinode, warn=False):
     for part in wikinode.findall("part"):
         value = part.find("value")
         if value.find("template") is not None:
-            print_warn("Nested otherdate templates are not supported")
+            if warn:
+                print_warn("Nested otherdate templates are not supported")
             return ("", )
         
         if value.text is None: #Some templates have empty values
