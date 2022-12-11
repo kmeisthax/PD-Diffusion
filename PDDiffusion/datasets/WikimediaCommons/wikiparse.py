@@ -591,6 +591,13 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
     elif subtmpl_title.lower() == "extracted from" or subtmpl_title.lower() == "ef" or subtmpl_title.lower() == "cropped":
         value = extract_text_from_value(params["1"], warn=warn, preferred_lang='en')
         text_value = f"This file has been extracted from another file: {value}"
+    elif subtmpl_title.lower() == "w":
+        text_value = "Main Page"
+        if "1" in params:
+            text_value = extract_text_from_value(params["1"], warn=warn, preferred_lang='en')
+        
+        if "2" in params:
+            text_value = extract_text_from_value(params["2"], warn=warn, preferred_lang='en')
     else:
         if warn:
             print_warn(f"Unknown value template {subtmpl_title}")
