@@ -598,6 +598,9 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         
         if "2" in params:
             text_value = extract_text_from_value(params["2"], warn=warn, preferred_lang='en')
+    elif subtmpl_title.lower() == "provenanceevent":
+        #TODO: Actually parse the provenance event template
+        text_value = ""
     else:
         if warn:
             print_warn(f"Unknown value template {subtmpl_title}")
