@@ -580,7 +580,17 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         value = extract_text_from_value(params["1"], warn=warn, preferred_lang='en')
         text_value = f"Geographicus link {value}"
     elif subtmpl_title.lower() == "geographicus-source":
-        text_value = f"This file was provided to Wikimedia Commons by Geographicus Rare Antique Maps, a specialist dealer in rare maps and other cartography of the 15th, 16th, 17th, 18th and 19th centuries, as part of a cooperation project."
+        text_value = "This file was provided to Wikimedia Commons by Geographicus Rare Antique Maps, a specialist dealer in rare maps and other cartography of the 15th, 16th, 17th, 18th and 19th centuries, as part of a cooperation project."
+    elif subtmpl_title.lower() == "pd-art":
+        #Note: this is not the whole template but we're going to be parsing license data in other ways
+        text_value = "This is a faithful photographic reproduction of a two-dimensional, public domain work of art."
+    elif subtmpl_title.lower() == "loc-map":
+        text_value = "This map is available from the United States Library of Congress's Geography & Map Division"
+    elif subtmpl_title.lower() == "not on view":
+        text_value = "not on view"
+    elif subtmpl_title.lower() == "extracted from" or subtmpl_title.lower() == "ef" or subtmpl_title.lower() == "cropped":
+        value = extract_text_from_value(params["1"], warn=warn, preferred_lang='en')
+        text_value = f"This file has been extracted from another file: {value}"
     else:
         if warn:
             print_warn(f"Unknown value template {subtmpl_title}")
