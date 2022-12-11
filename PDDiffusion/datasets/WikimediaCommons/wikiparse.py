@@ -26,7 +26,7 @@ def extract_languages_from_template(tmpl, warn=False):
 
     langs = {}
 
-    lang = tmpl.find("title").text.strip()
+    lang = tmpl.find("title").text.strip().lower()
     
     if lang == "title":
         slot1 = None
@@ -69,7 +69,7 @@ def extract_languages_from_template(tmpl, warn=False):
         
         if slot1lang is not None and slot1 is not None:
             langs[slot1lang] = slot1
-    elif lang == "LangSwitch":
+    elif lang == "langswitch":
         for part in tmpl.findall("part"):
             if part.find("name").text is None:
                 if warn:
