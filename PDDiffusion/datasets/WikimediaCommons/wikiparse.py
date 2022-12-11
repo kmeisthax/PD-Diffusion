@@ -28,7 +28,7 @@ def extract_languages_from_template(tmpl, warn=False):
 
     lang = tmpl.find("title").text.strip().lower()
     
-    if lang == "title":
+    if lang == "title" or lang == "alternative titles":
         slot1 = None
         slot1lang = None
 
@@ -85,6 +85,29 @@ def extract_languages_from_template(tmpl, warn=False):
             else:
                 if warn:
                     print_warn(f"LangSwitch parameter {inner_lang} not yet supported")
+    elif lang == "inscription":
+        #TODO: Some of the art history information is omitted here.
+        params = extract_template_arguments(tmpl)
+        
+        slot1 = None
+        slot1lang = None
+
+        for key in params.keys():
+            if len(key) == 2:
+                langs[key] = params[key]
+            elif key == "1":
+                slot1 = params[key]
+            elif key == "language" or key == "lang":
+                slot1lang = params[key]
+            else:
+                if warn and (key != "type" or key != "position"): #ignore type/position since we can't translate it
+                    print_warn(f"Unknown inscription key {key}")
+        
+        if slot1 is not None:
+            if slot1lang is not None and len(slot1lang) == 2: #language code
+                langs[slot1lang] = slot1
+            else: #nonlinguistic, unknown, or bilingual
+                langs["*"] = slot1
     elif len(lang) == 2:
         #Single language template, of the form {{lang|1=(language text)}}
         #or {{lang|(language text)}}
@@ -123,7 +146,7 @@ def parse_upper_and_lower_dates(lower_date, upper_date, warn=False):
     #Some dates are in YYYY-YYYY format without being split into two template parameters.
     #or YYYY–YYYY format, or YYYY—YYYY format. YES THOSE ARE ALL DIFFERENT CHARACTERS
     #Someone also used YYYY\YYYY format
-    lower_date_emless = lower_date.replace("–", "-").replace("—", "-").replace("\\", "-")
+    lower_date_emless = lower_date.replace("–", "-").replace("—", "-").replace("\\", "-").replace("/", "-")
     if upper_date is None and '-' in lower_date_emless:
         #TODO: This introduces upper dates to formats that don't expect them.
         #They will be dropped for now
@@ -465,7 +488,7 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
                 print_warn(f"Institution template {text_value} has unknown data")
     elif subtmpl_title.lower() == "oil on canvas":
         text_value = "Oil on canvas"
-    elif subtmpl_title.lower() == "oil on panel":
+    elif subtmpl_title.lower() == "oil on panel" or subtmpl_title.lower() == "oil on wood":
         text_value = "Oil on panel"
     elif subtmpl_title.lower() == "tempera on panel" or subtmpl_title.lower() == "tempera on wood" or subtmpl_title.lower() == "tempera on wood panel":
         text_value = "Tempera on panel"
@@ -502,10 +525,18 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         text_value = "Portrait of a woman"
     elif subtmpl_title.lower() == "madonna and child":
         text_value = "Madonna and Child"
+    elif subtmpl_title.lower() == "assumption of mary":
+        text_value = "Assumption of Mary"
     elif subtmpl_title.lower() == "and" or subtmpl_title.lower() == "Conj-and":
         text_value = "and"
     elif subtmpl_title.lower() == "drawing":
         text_value = "drawing"
+    elif subtmpl_title.lower() == "sheet":
+        text_value = "Sheet"
+    elif subtmpl_title.lower() == "engraving":
+        text_value = "engraving"
+    elif subtmpl_title.lower() == "anonymous":
+        text_value = "Anonymous"
     elif subtmpl_title.lower() == "unknown":
         text_value = "Unknown"
         
@@ -536,6 +567,34 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         upper_date = parse_ymd(upper_date)[0]
         
         text_value = f"from {lower_date} to {upper_date}"
+    elif subtmpl_title.lower() == "circa": #TODO BC/AD
+        if "1" in params:
+            (lower_year, upper_year) = parse_upper_and_lower_dates(extract_text_from_value(params["1"], warn=warn, preferred_lang="en"), None, warn=warn)
+            try:
+                y = int(lower_year)
+
+                if "2" in params:
+                    m = int(extract_text_from_value(params["2"], warn=warn, preferred_lang="en"))
+                    if m > 12:
+                        text_value = f"circa {y}-{m}"
+                    elif "3" in params:
+                        d = int(extract_text_from_value(params["3"], warn=warn, preferred_lang="en"))
+
+                        text_value = "circa " + datetime.datetime(y, m, d).strftime("%d %B %Y")
+                    else:
+                        text_value = "circa " + datetime.datetime(y, m, 1).strftime("%B %Y")
+                elif upper_year is not None:
+                    y2 = int(upper_year)
+                    text_value = f"circa {y}-{y2}"
+                else:
+                    text_value = f"circa {y}"
+            except ValueError: #Some users of circa don't actually put a valid date into the year slot
+                value = extract_text_from_value(params["1"], warn=warn, preferred_lang="en")
+                text_value = f"circa {value}"
+        else:
+            if warn:
+                print_warn("Missing circa date. Fix upstream!")
+            text_value = "circa"
     elif subtmpl_title.lower() == "other date" or subtmpl_title.lower() == "otherdate":
         text_value = evaluate_otherdate(subtmpl, warn=warn)[0]
     elif subtmpl_title.lower() == "ucfirst:" or subtmpl_title.lower() == "ucfirstletter:":
@@ -581,16 +640,55 @@ def extract_template_tag(subtmpl, warn=False, preferred_lang="en"):
         text_value = f"Geographicus link {value}"
     elif subtmpl_title.lower() == "geographicus-source":
         text_value = "This file was provided to Wikimedia Commons by Geographicus Rare Antique Maps, a specialist dealer in rare maps and other cartography of the 15th, 16th, 17th, 18th and 19th centuries, as part of a cooperation project."
-    elif subtmpl_title.lower() == "pd-art":
+    elif subtmpl_title.lower() == "sourcenpglondon":
+        #TODO: This indicates an ACTIVE LEGAL THREAT to wikimedia commons based
+        #off the UK's sweat-of-the-brow crap.
+        text_value = "While Commons policy accepts the use of this media, one or more third parties have made copyright claims against Wikimedia Commons in relation to the work from which this is sourced or a purely mechanical reproduction thereof."
+    elif subtmpl_title.lower() == "pd-art" or subtmpl_title.lower() == "pd-art-old-100":
         #Note: this is not the whole template but we're going to be parsing license data in other ways
         text_value = "This is a faithful photographic reproduction of a two-dimensional, public domain work of art."
+    elif subtmpl_title.lower() == "self":
+        #TODO: This also has license assertions that may counteract PD-Art.
+        text_value = "I, the copyright holder of this work, hereby publish it under the following license:"
     elif subtmpl_title.lower() == "loc-map":
         text_value = "This map is available from the United States Library of Congress's Geography & Map Division"
+    elif subtmpl_title.lower() == "royal museums greenwich":
+        #TODO: Implies CC-BY-NC-SA on the labels
+        text_value = "The original artefact or artwork has been assessed as public domain by age, and faithful reproductions of the two dimensional work are also public domain. No permission is required for reuse for any purpose. The text of this image record has been derived from the Royal Museums Greenwich catalogue and image metadata. Individual data and facts such as date, author and title are not copyrightable, but reuse of longer descriptive text from the catalogue may not be considered fair use. Reuse of the text must be attributed to the 'National Maritime Museum, Greenwich, London' and a Creative Commons CC-BY-NC-SA-3.0 license may apply if not rewritten. Refer to Royal Museums Greenwich copyright."
+    elif subtmpl_title.lower() == "rkd":
+        text_value = "This image is available from the Netherlands Institute for Art History."
     elif subtmpl_title.lower() == "not on view":
         text_value = "not on view"
+    elif subtmpl_title.lower() == "private collection": #TODO: There's extra arguments here.
+        text_value = "Private collection"
     elif subtmpl_title.lower() == "extracted from" or subtmpl_title.lower() == "ef" or subtmpl_title.lower() == "cropped":
         value = extract_text_from_value(params["1"], warn=warn, preferred_lang='en')
         text_value = f"This file has been extracted from another file: {value}"
+    elif subtmpl_title.lower() == "image extracted" or subtmpl_title.lower() == "extracted":
+        value = extract_text_from_value(params["1"], warn=warn, preferred_lang='en')
+        text_value = f"This file has an extracted image: {value}"
+    elif subtmpl_title.lower() == "detail":
+        if "1" in params:
+            description = extract_text_from_value(params["1"], warn=warn, preferred_lang='en')
+
+            if "position" in params:
+                position = extract_text_from_value(params["position"], warn=warn, preferred_lang='en')
+                text_value = f"detail: {description} ({position})"
+            else:
+                text_value = f"detail: {description}"
+        else:
+            if warn:
+                print_warn("Detail template is missing description")
+    elif subtmpl_title.lower() == "wga link":
+        pic_url = ""
+        if "pic-url" in params:
+            pic_url = extract_text_from_value(params["pic-url"], warn=warn, preferred_lang='en')
+        
+        info_url = ""
+        if "info-url" in params:
+            info_url = extract_text_from_value(params["info-url"], warn=warn, preferred_lang='en')
+        
+        text_value = f"Web Gallery of Art: {pic_url} {info_url}"
     elif subtmpl_title.lower() == "w":
         text_value = "Main Page"
         if "1" in params:
