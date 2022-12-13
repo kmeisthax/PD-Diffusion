@@ -185,7 +185,7 @@ def local_wikimedia(limit = None, prohibited_categories=[], load_images=True, in
                     xmlstr = metadata_obj["parsetree"][name]
 
                     try:
-                        extracted = extract_information_from_wikitext(xmlstr, warn=True)
+                        extracted = extract_information_from_wikitext(xmlstr)
 
                         #We add in reverse order here to both:
                         #  - Avoid obliterating data extracted from the terms
