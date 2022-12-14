@@ -868,10 +868,17 @@ def extract_information_from_wikitext(wikixml, warn=False, preferred_lang = "en"
 
             #Info fields can live anywhere and jump out into the info block
             extra_fields = extract_other_fields_from_value(value, warn=warn, preferred_lang=preferred_lang)
-            for name in extra_fields.keys():
-                info[name] = extra_fields[name]
-            
-            info[name.lower()] = extract_text_from_value(value, warn=warn, preferred_lang=preferred_lang)
+            if len(extra_fields) > 0:
+                for name in extra_fields.keys():
+                    if name.lower() in info and warn:
+                        print_warn(f"Extra field {name.lower()} conflicts with already installed field")
+                    
+                    info[name.lower()] = extra_fields[name]
+            else:
+                if name.lower() in info and warn:
+                    print_warn(f"Regular field {name.lower()} conflicts with already installed field")
+                
+                info[name.lower()] = extract_text_from_value(value, warn=warn, preferred_lang=preferred_lang)
         
         break
     else:
