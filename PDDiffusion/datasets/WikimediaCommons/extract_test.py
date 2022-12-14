@@ -57,14 +57,14 @@ for file in itertools.chain(
 with open("extract_test_results.json", 'w') as json_file:
     json.dump(report, json_file, indent=4)
 
-headers = ["File", "object type", "artist", "date", "title", "medium", "description", "__label"]
+headers = ["file", "object type", "artist", "date", "title", "medium", "description", "__label"]
 headermap = {key: id for (id, key) in enumerate(headers)}
 
 rows = []
 
 for item in report:
     if item["status"] == "present":
-        item_data = {"File": item["file"]}
+        item_data = {"file": item["file"]}
 
         if item["terms"] is not None:
             for key in item["terms"].keys():
