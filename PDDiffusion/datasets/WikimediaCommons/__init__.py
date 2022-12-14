@@ -62,6 +62,9 @@ class Connection(object):
             else:
                 return
     
+    def info(self, titles=[]):
+        return self.get(action="query", prop="info", titles="|".join(titles))
+
     def image_info(self, titles=[], iiprop=[]):
         return self.get(action="query", prop="imageinfo", titles="|".join(titles), iiprop="|".join(iiprop))
     
@@ -74,6 +77,9 @@ class Connection(object):
     
     def parse_tree(self, title):
         return self.get(action="parse", prop="parsetree", page=title)
+    
+    def revisions(self, titles=[], rvprop=[], rvlimit=100, rvcontinue=None):
+        return self.get(action="query", prop="revisions", titles="|".join(titles), rvprop="|".join(rvprop), rvlimit=rvlimit, rvcontinue=rvcontinue)
     
     def urlopen(self, url):
         if not isinstance(url, urllib.request.Request):
@@ -129,11 +135,14 @@ def image_is_valid(file):
         print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
         return False
 
-def scrape_and_save_metadata(conn, item, localfile):
+def scrape_and_save_metadata(conn, localfile, item=None, rescrape=False):
     """Scrape data from the Wikimedia connection and item to the local file path given.
     
-    Item must be a dict with "title" and "pageid" keys matching the item to download.
-    Localfile must be a valid filesystem path.
+    Item must be a dict with "title" and "pageid" keys matching the item to
+    download. Localfile must be a valid filesystem path. If not provided, we
+    will attempt to recover it from the title in the stored metadata. If you
+    are scraping from a Mediawiki server, the `walk_category` method of
+    `Connection` will provide item dicts for you.
     
     Returns True if the file scraped successfully and new data was obtained.
     False indicates one of the following possible error conditions:
@@ -151,6 +160,12 @@ def scrape_and_save_metadata(conn, item, localfile):
         #or because the file could not be decoded in PIL.
         return False
 
+    true_item_name = None
+    true_pageid = None
+    if item is not None:
+        true_item_name = item["title"]
+        true_pageid = item["pageid"]
+    
     file_already_exists = os.path.exists(localfile)
     metadata_already_exists = os.path.exists(metadatafile)
     if metadata_already_exists:
@@ -160,13 +175,49 @@ def scrape_and_save_metadata(conn, item, localfile):
 
             if "categories" not in source_data or "parsetree" not in source_data:
                 metadata_already_exists = False
+            
+            if "timestamp" not in source_data or "revisions" not in source_data:
+                metadata_already_exists = False
+            
+            if "item" in source_data:
+                true_item_name = source_data["item"]["title"]
+                true_pageid = source_data["item"]["pageid"]
+            else:
+                #Attempt to recover the page name from the stripped titles we
+                #saved in earlier runs. We only ever stored file metadata in
+                #this state, so we can assume what we stored earlier was files.
+                ext = os.path.splitext(localfile)[1]
+                if not source_data["title"].endswith(ext):
+                    true_item_name = f"File:{source_data['title']}{ext}"
+                else:
+                    #Some of our data has file extensions and some of it doesn't
+                    #We should probably discontinue use of the stripped title field
+                    true_item_name = f"File:{source_data['title']}"
+                
+                metadata_already_exists = False
+    
+    if true_item_name is None:
+        raise Exception(f"Local metadata file {localfile} does not exist and there is no page title to work with")
+    
+    if true_pageid is None:
+        #We can recover from this, too.
+        #Just store the first page ID we see.
+        pageinfo = conn.info(titles=[true_item_name])
+        for pageid in pageinfo["query"]["pages"].keys():
+            if true_pageid is not None:
+                raise Exception(f"Local metadata file {localfile} does not have an unambiguous page ID")
+
+            true_pageid = pageid
+        
+        if true_pageid is None:
+            raise Exception(f"Local metadata file {localfile} has been deleted")
     
     if file_already_exists and metadata_already_exists:
         return False
     
-    print(item["title"])
+    print(true_item_name)
     
-    image_info = conn.image_info(titles=[item["title"]], iiprop=["url", "size"])["query"]["pages"][str(item["pageid"])]["imageinfo"]
+    image_info = conn.image_info(titles=[true_item_name], iiprop=["url", "size"])["query"]["pages"][str(true_pageid)]["imageinfo"]
     image_is_banned = False
     for image in image_info:
         if image["size"] > Image.MAX_IMAGE_PIXELS:
@@ -186,17 +237,43 @@ def scrape_and_save_metadata(conn, item, localfile):
     
     if not metadata_already_exists:
         metadata = {}
-        metadata["title"] = item["title"].removeprefix("File:").removesuffix(".jpg").removesuffix(".jpeg").removesuffix(".png").removesuffix(".tif").removesuffix(".tiff")
+        metadata["item"] = {
+            "title": true_item_name,
+            "pageid": true_pageid
+        }
+        metadata["title"] = true_item_name.removeprefix("File:").removesuffix(".jpg").removesuffix(".jpeg").removesuffix(".png").removesuffix(".tif").removesuffix(".tiff")
+        
+        rv_timestamp = conn.revisions(titles=[true_item_name], rvprop=["timestamp"])
+        if "revisions" in rv_timestamp["query"]["pages"][str(true_pageid)]:
+            metadata["timestamp"] = rv_timestamp["query"]["pages"][str(true_pageid)]["revisions"][0]["timestamp"]
 
-        page_terms = conn.page_terms(titles=[item["title"]])
-        if "terms" in page_terms["query"]["pages"][str(item["pageid"])]:
-            metadata["terms"] = page_terms["query"]["pages"][str(item["pageid"])]["terms"]
+            revisions = rv_timestamp["query"]["pages"][str(true_pageid)]["revisions"]
+            if "continue" in rv_timestamp:
+                rvcontinue = rv_timestamp["continue"]["rvcontinue"]
+
+                while rvcontinue is not None:
+                    rvcontinue_data = conn.revisions(titles=[true_item_name], rvcontinue=rvcontinue)
+                    if "revisions" in rvcontinue_data["query"]["pages"][str(true_pageid)]:
+                        for rev in rvcontinue_data["query"]["pages"][str(true_pageid)]["revisions"]:
+                            revisions.append(rev)
+                    
+                    if "continue" in rvcontinue_data:
+                        rvcontinue = rvcontinue_data["continue"]["rvcontinue"]
+                    else:
+                        rvcontinue = None
+            
+            print(f"{len(revisions)} revisions")
+            metadata["revisions"] = revisions
+
+        page_terms = conn.page_terms(titles=[true_item_name])
+        if "terms" in page_terms["query"]["pages"][str(true_pageid)]:
+            metadata["terms"] = page_terms["query"]["pages"][str(true_pageid)]["terms"]
         
-        page_cats = conn.categories(titles=[item["title"]])
-        if "categories" in page_cats["query"]["pages"][str(item["pageid"])]:
-            metadata["categories"] = page_cats["query"]["pages"][str(item["pageid"])]["categories"]
+        page_cats = conn.categories(titles=[true_item_name])
+        if "categories" in page_cats["query"]["pages"][str(true_pageid)]:
+            metadata["categories"] = page_cats["query"]["pages"][str(true_pageid)]["categories"]
         
-        page_text = conn.parse_tree(item["title"])
+        page_text = conn.parse_tree(true_item_name)
         if "parsetree" in page_text["parse"]:
             metadata["parsetree"] = page_text["parse"]["parsetree"]
         
