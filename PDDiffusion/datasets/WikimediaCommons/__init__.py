@@ -196,6 +196,9 @@ def scrape_and_save_metadata(conn, localfile, item=None, rescrape=False):
                 
                 metadata_already_exists = False
     
+    #TODO: Handle redirects.
+    #File:Gérard - Eugène de Beauharnais 1.jpg is an example redirect
+
     if true_item_name is None:
         raise Exception(f"Local metadata file {localfile} does not exist and there is no page title to work with")
     
