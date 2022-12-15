@@ -262,7 +262,6 @@ def scrape_and_save_metadata(conn, localfile, item=None, rescrape=False):
                     else:
                         rvcontinue = None
             
-            print(f"{len(revisions)} revisions")
             metadata["revisions"] = revisions
 
         page_terms = conn.page_terms(titles=[true_item_name])
