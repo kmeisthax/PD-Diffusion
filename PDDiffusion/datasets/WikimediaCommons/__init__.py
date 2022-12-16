@@ -320,17 +320,21 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
                 metadata_obj = json.load(metadata)
                 is_prohibited = False
 
-                for category in metadata_obj["categories"]:
-                    if category["title"] in prohibited_categories:
-                        print("{} is prohibited".format(category["title"]))
-                        is_prohibited = True
-                        break
+                if "categories" in metadata_obj:
+                    for category in metadata_obj["categories"]:
+                        if category["title"] in prohibited_categories:
+                            print("{} is prohibited".format(category["title"]))
+                            is_prohibited = True
+                            break
+                else:
+                    #TODO: When scraping we should ensure "no categories" is represented as an empty list
+                    print(f"{metadata_obj['item']['title']} has no categories")
                 
                 if is_prohibited:
                     continue
 
-                extracted["__pagetitle"] = metadata["item"]["title"]
-                extracted["__pageid"] = metadata["item"]["id"]
+                extracted["__pagetitle"] = metadata_obj["item"]["title"]
+                extracted["__pageid"] = metadata_obj["item"]["pageid"]
                 
                 try:
                     for key in metadata_obj["terms"].keys():
