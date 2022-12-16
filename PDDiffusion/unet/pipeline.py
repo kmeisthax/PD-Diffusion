@@ -56,7 +56,15 @@ class DDPMConditionalPipeline(DiffusionPipeline):
             batch_size (`int`, *optional*, defaults to 1):
                 The number of images to generate.
         """
-        text_inputs = self.tokenizer(prompt, padding="max_length", max_length=self.tokenizer.model_max_length, truncation=True, return_tensors="pt")
+
+        tokargs = {"return_tensors":"pt"}
+
+        if self.tokenizer.model_max_length < 1e30:
+            tokargs["padding"] = "max_length"
+            tokargs["max_length"] = self.tokenizer.model_max_length
+            tokargs["truncation"] = True
+
+        text_inputs = self.tokenizer(prompt, **tokargs)
 
         if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
             attention_mask = text_inputs.attention_mask.to(device)
