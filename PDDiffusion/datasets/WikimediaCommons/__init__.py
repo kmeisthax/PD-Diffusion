@@ -286,15 +286,15 @@ def scrape_and_save_metadata(conn, localfile, item=None, rescrape=False):
     
     return not image_is_banned
 
-def local_wikimedia(limit = None, prohibited_categories=[], load_images=True, intended_maximum_size=512):
+def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=True, intended_maximum_size=512):
     """Load in training data previously downloaded by running this module's main.
     
-    Intended to be used as a Huggingface dataset via:
+    The yielded data items will be minimally processed: that is, all text fields
+    will be returned separately instead of being merged together for ML label
+    processing.
     
-    ```from datasets import Dataset
-    from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
-    
-    data = Dataset.from_generator(local_wikimedia)```"""
+    If load_images is enabled, PIL image data will be provided. Images will be
+    shrunk to fit the intended_maximum_size and stored on disk."""
     
     count = 0
 
@@ -314,12 +314,10 @@ def local_wikimedia(limit = None, prohibited_categories=[], load_images=True, in
         
         count += 1
 
-        label = None
+        extracted = {}
         if os.path.exists(file + ".json"):
             with open(file + ".json", "r") as metadata:
                 metadata_obj = json.load(metadata)
-                label = metadata_obj["title"]
-
                 is_prohibited = False
 
                 for category in metadata_obj["categories"]:
@@ -331,10 +329,12 @@ def local_wikimedia(limit = None, prohibited_categories=[], load_images=True, in
                 if is_prohibited:
                     continue
 
-                #TODO: Should we yield the same image twice with different data?
+                extracted["__pagetitle"] = metadata["item"]["title"]
+                extracted["__pageid"] = metadata["item"]["id"]
+                
                 try:
-                    for extra in metadata_obj["terms"]["label"]:
-                        label = label + ", " + extra
+                    for key in metadata_obj["terms"].keys():
+                        extracted[f"__{key}"] = ", ".join(metadata_obj["terms"]["key"])
                 except:
                     pass
                 
@@ -342,35 +342,11 @@ def local_wikimedia(limit = None, prohibited_categories=[], load_images=True, in
                     xmlstr = metadata_obj["parsetree"][name]
 
                     try:
-                        extracted = extract_information_from_wikitext(xmlstr)
-
-                        #We add in reverse order here to both:
-                        #  - Avoid obliterating data extracted from the terms
-                        #  - Keep the most concise/important data first since CLIP has
-                        #    a maximum token count
-                        if "description" in extracted:
-                            label = extracted["description"] + " " + label
-                        
-                        if "medium" in extracted:
-                            label = extracted["medium"] + " " + label
-                        
-                        if "title" in extracted:
-                            label = extracted["title"] + " " + label
-
-                        if "date" in extracted:
-                            label = extracted["date"] + " " + label
-
-                        if "artist" in extracted:
-                            label = extracted["artist"] + " " + label
-
-                        if "object type" in extracted:
-                            label = extracted["object type"] + " " + label
+                        extracted.update(extract_information_from_wikitext(xmlstr))
                     except Exception as e:
                         pass
         
-        if label is None:
-            print ("Warning: Image {} is unlabeled, skipping".format(file))
-            continue
+        extracted["image_file_path"] = os.path.abspath(file)
         
         if load_images:
             #Check if our image has been resized down already, and if so use it.
@@ -399,6 +375,62 @@ def local_wikimedia(limit = None, prohibited_categories=[], load_images=True, in
             image = Image.open(os.path.abspath(file))
             image.close()
 
-            yield {"image": image, "image_file_path": os.path.abspath(file), "text": label}
-        else:
-            yield {"image_file_path": os.path.abspath(file), "text": label}
+            extracted["image"] = image
+        
+        yield extracted
+
+def local_wikimedia(limit = None, prohibited_categories=[], load_images=True, intended_maximum_size=512):
+    """Load in training data previously downloaded by running this module's main.
+
+    Synthesizes a label field from extracted wikitext in the process. This
+    function is deprecated, callers should migrate to local_wikimedia_base and
+    then decide how they want to handle the Wikimedia Commons label fields. For
+    example, if you are training a text tokenizer, you may want to process all
+    fields; but if you're training CLIP you would want to change the fields out
+    every epoch as a data augmentation strategy.
+    
+    Intended to be used as a Huggingface dataset via:
+    
+    ```from datasets import Dataset
+    from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
+    
+    data = Dataset.from_generator(local_wikimedia)```"""
+    
+    for item in local_wikimedia_base(
+            limit=limit,
+            prohibited_categories=prohibited_categories,
+            load_images=load_images,
+            intended_maximum_size=intended_maximum_size):
+        
+        #Synthesize a label from the item data
+
+        label = item["__pagetitle"]
+
+        if "__label" in item:
+            label = label + ", " + item["__label"]
+
+        #We add in reverse order here to both:
+        #  - Avoid obliterating data extracted from the terms
+        #  - Keep the most concise/important data first since CLIP has
+        #    a maximum token count
+        if "description" in item:
+            label = item["description"] + " " + label
+        
+        if "medium" in item:
+            label = item["medium"] + " " + label
+        
+        if "title" in item:
+            label = item["title"] + " " + label
+
+        if "date" in item:
+            label = item["date"] + " " + label
+
+        if "artist" in item:
+            label = item["artist"] + " " + label
+
+        if "object type" in item:
+            label = item["object type"] + " " + label
+        
+        item["label"] = label
+
+        yield item
