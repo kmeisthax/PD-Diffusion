@@ -350,7 +350,7 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
                 
                 try:
                     for key in metadata_obj["terms"].keys():
-                        extracted[f"__{key}"] = ", ".join(metadata_obj["terms"]["key"])
+                        extracted[f"__{key}"] = ", ".join(metadata_obj["terms"][key])
                 except:
                     pass
                 
