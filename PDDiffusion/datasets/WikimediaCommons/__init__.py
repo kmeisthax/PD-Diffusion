@@ -135,7 +135,7 @@ def image_is_valid(file):
         print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
         return False
 
-def scrape_and_save_metadata(conn, localfile, item=None, rescrape=False):
+def scrape_and_save_metadata(conn, item=None, localfile=None, rescrape=False):
     """Scrape data from the Wikimedia connection and item to the local file path given.
     
     Item must be a dict with "title" and "pageid" keys matching the item to
@@ -152,6 +152,14 @@ def scrape_and_save_metadata(conn, localfile, item=None, rescrape=False):
     
     If you are enforcing a scrape limit, be sure not to count failures against
     that limit."""
+    
+    if localfile is None:
+        if item is None:
+            raise Exception("Must specify one of item or localfile when scraping")
+        
+        localfile = item["title"].removeprefix("File:").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
+        localfile = os.path.join(LOCAL_STORAGE, localfile)
+
     metadatafile = localfile + '.json'
 
     if os.path.exists(localfile + ".banned") or os.path.exists(localfile + ".bannedmetadata"):
@@ -195,6 +203,10 @@ def scrape_and_save_metadata(conn, localfile, item=None, rescrape=False):
                     true_item_name = f"File:{source_data['title']}"
                 
                 metadata_already_exists = False
+    
+    if rescrape:
+        #Rescrapes ALWAYS trigger a metadata redownload.
+        metadata_already_exists = False
     
     #TODO: Handle redirects.
     #File:Gérard - Eugène de Beauharnais 1.jpg is an example redirect

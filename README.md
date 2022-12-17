@@ -160,7 +160,17 @@ You must provide a valid e-mail address using the --email parameter, as per Wiki
 
 Public-domain status is currently determined by a category walk from `PD-Art (PD-old-100)`, as this appeared to be the strictest possible definition. Restricting ourselves to works over a century old also means very few *living* authors getting their work scraped. There *are* broader PD categories on Wikimedia Commons, but many of them are country-specific and have other ethical problems (notably `PD-Italy` which has a lot of living people's photographs in it).
 
-Image *labels* are not public domain and may have attribution requirements that would impact trained model weights for pipelines that use the labels.
+The licensing status of non-image data is more complicated. Wikimedia Commons' policy is that *structured* data is CC0 while *unstructured* data is CC-BY-SA. Some images have further requirements over the unstructured data. Currently, we use both. Trained models that see the unstructured data would be considered derivative works, but the copyright on label data would not "infect" the generated output images.
+
+### Labeling tool
+
+```
+python -m PDDiffusion.datasets.WikimediaCommons.labeling_tool
+```
+
+This tool picks a random unlabeled image and gives you the link to edit the image. Once you've finished, you press enter and it rescrapes the image metadata you just saved.
+
+Unlabeled is determined solely by the caption field and not any other data state. We intend for you to, at a minimum, fill out the caption field, which is CC0.
 
 ### Smithsonian Open Access
 

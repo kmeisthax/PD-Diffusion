@@ -31,15 +31,12 @@ if options.rescrape:
         if count >= options.limit:
             break
 
-        if scrape_and_save_metadata(conn, localfile, rescrape=False):
+        if scrape_and_save_metadata(conn, localfile=localfile, rescrape=False):
             count += 1
 else:
     for item in conn.walk_category(PD_ART_CATEGORY_OLD100, member_types=["file"]):
         if count >= options.limit:
             break
-
-        sanitized_image_name = item["title"].removeprefix("File:").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
-        localfile = os.path.join(LOCAL_STORAGE, sanitized_image_name)
         
-        if scrape_and_save_metadata(conn, localfile, item, rescrape=False):
+        if scrape_and_save_metadata(conn, item, rescrape=False):
             count += 1
