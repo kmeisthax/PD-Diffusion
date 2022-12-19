@@ -4,7 +4,6 @@ from PDDiffusion.datasets.model import mapper_registry
 from argparse_dataclass import dataclass
 from dataclasses import field
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 import sys
 
 @dataclass
