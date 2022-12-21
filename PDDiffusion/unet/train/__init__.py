@@ -176,7 +176,7 @@ def load_dataset_with_condition(config, accelerator):
         #Extract the config outside of the batched/no-grad area
         cond_config = cond_model.config
 
-        def clip_classify(images):
+        def clip_classify(images, text):
             nonlocal cond_model
 
             cond_model = accelerator.prepare(cond_model)
@@ -186,7 +186,8 @@ def load_dataset_with_condition(config, accelerator):
                 progress_bar = tqdm(total=math.ceil(len(images) / batch_size), disable=not accelerator.is_local_main_process)
                 progress_bar.set_description(f"CLIP Image Processing")
 
-                conditions = []
+                conditions_image = []
+                conditions_text = []
 
                 if str(cond_model.device).startswith("cuda:"):
                     progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
@@ -196,27 +197,34 @@ def load_dataset_with_condition(config, accelerator):
                         progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
                     
                     clip_images = [clip_preprocess(Image.open(image["path"]).convert("RGB")) for image in images[i:i+batch_size]]
-                    encoded_images = cond_processor(images=clip_images, return_tensors="pt")
-                    if cond_model.device != "cpu":
-                        encoded_images.to(cond_model.device)
-                    
-                    condition = cond_model.visual_projection(cond_model.vision_model(**encoded_images)[1])
+                    encoded_images = cond_processor(images=clip_images, return_tensors="pt")["pixel_values"]
+                    encoded_text = cond_processor(text=text[i:i+batch_size], padding='max_length', truncation=True, max_length=cond_model.text_model.config.max_position_embeddings)
 
-                    #Don't ask why but there's a normalization step in CLIPModel.
-                    #I'd just call into CLIPModel directly but I can't, because it
-                    #won't do ONLY text or ONLY images. It wants both.
-                    condition = condition / condition.norm(p=2, dim=-1, keepdim=True)
-                    condition = condition.to("cpu")
+                    encoded_text_ids = torch.tensor(encoded_text["input_ids"])
+                    encoded_text_mask = torch.tensor(encoded_text["attention_mask"])
+
+                    if cond_model.device != "cpu":
+                        encoded_images = encoded_images.to(cond_model.device)
+                        encoded_text_ids = encoded_text_ids.to(cond_model.device)
+                        encoded_text_mask = encoded_text_mask.to(cond_model.device)
+                    
+                    condition = cond_model(input_ids=encoded_text_ids, attention_mask=encoded_text_mask, pixel_values=encoded_images)
+                    image_embeds = condition.image_embeds
+                    text_embeds = condition.text_embeds
 
                     if config.mixed_precision == "fp16":
-                        condition = condition.type(torch.float16)
+                        image_embeds = image_embeds.type(torch.float16)
+                        text_embeds = text_embeds.type(torch.float16)
                     elif config.mixed_precision == "bf16":
-                        condition = condition.type(torch.bfloat16)
+                        image_embeds = image_embeds.type(torch.bfloat16)
+                        text_embeds = text_embeds.type(torch.bfloat16)
                     else:
-                        condition = condition.type(torch.float32)
+                        image_embeds = image_embeds.type(torch.float32)
+                        text_embeds = text_embeds.type(torch.float32)
                     
-                    for row in condition:
-                        conditions.append(row)
+                    for (image_row, text_row) in zip(image_embeds, text_embeds):
+                        conditions_image.append(image_row)
+                        conditions_text.append(text_row)
                     
                     progress_bar.update(1)
                 
@@ -227,7 +235,9 @@ def load_dataset_with_condition(config, accelerator):
                 
                 return {
                     "image": images,
-                    "condition": conditions
+                    "text": text,
+                    "condition_image": conditions_image,
+                    "condition_text": conditions_text,
                 }
             
             return inner_batch()
@@ -239,10 +249,10 @@ def load_dataset_with_condition(config, accelerator):
             current_fp_type = "bfloat16" #TODO: not actually a documented FP type in Huggingface Datasets and I don't have an Ampere GPU to test
         
         dataset = dataset.map(clip_classify,
-            input_columns=["image"],
+            input_columns=["image", "text"],
             batched=True,
             batch_size=None,
-            features=Features({"condition": [Value(current_fp_type)], "image": DatasetsImage(), "image_file_path": Value("string"), "text": Value("string")}))
+            features=Features({"condition_image": [Value(current_fp_type)], "condition_text": [Value(current_fp_type)], "image": DatasetsImage(), "image_file_path": Value("string"), "text": Value("string")}))
         dataset.set_transform(transform, columns=["image"], output_all_columns=True)
 
         return (dataset, cond_config)

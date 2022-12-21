@@ -112,11 +112,20 @@ def train_loop(config):
                         # The unsqueeze adds a dimension because Cross Attention
                         # blocks support multiple condition inputs per batch.
 
+                        cond_text = batch["condition_text"]
+                        cond_image = batch["condition_image"]
+
                         if config.mixed_precision == "no":
                             #bonus points: fp32 gets magically turned into fp64
-                            parameters["encoder_hidden_states"] = torch.stack(batch["condition"], 1).unsqueeze(1).type(torch.float32)
+                            cond_text = torch.stack(cond_text, 1).unsqueeze(1).type(torch.float32)
+                            cond_image = torch.stack(cond_image, 1).unsqueeze(1).type(torch.float32)
                         else:
-                            parameters["encoder_hidden_states"] = torch.stack(batch["condition"], 1).unsqueeze(1)
+                            cond_text = torch.stack(cond_text, 1).unsqueeze(1)
+                            cond_image = torch.stack(cond_image, 1).unsqueeze(1)
+                        
+                        #Shuffle the condition vectors around.
+                        shuffle = torch.round(torch.rand(cond_text.shape[0], dtype=cond_text.dtype, device=cond_text.device)).unsqueeze(1)
+                        parameters["encoder_hidden_states"] = cond_text * shuffle + cond_image * -(shuffle - 1)
 
                     # Predict the noise residual
                     noise_pred = model(noisy_images, timesteps, **parameters)[0]
