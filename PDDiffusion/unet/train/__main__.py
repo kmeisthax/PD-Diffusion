@@ -1,6 +1,6 @@
 from PDDiffusion.unet.train import TrainingOptions, load_model_and_progress, evaluate, load_condition_model_and_processor, load_dataset_with_condition, create_model_pipeline
 
-import os.path, torch, json, sys
+import os.path, torch, json, sys, math
 
 from accelerate import Accelerator, find_executable_batch_size
 from diffusers import DDPMScheduler, DDPMPipeline
@@ -83,12 +83,20 @@ def train_loop(config):
         
         global_step = 0
 
+        #Calculate how much batch data to toss in order to meet our image limit
+        num_batch_to_skip = len(train_dataloader)
+        if config.image_limit is not None:
+            num_batch_to_skip = math.ceil(config.image_limit / batch_size)
+
         # Now you train the model
         for epoch in range(progress["last_epoch"] + 1, config.num_epochs):
-            progress_bar = tqdm(total=len(train_dataloader), disable=not accelerator.is_local_main_process)
+            progress_bar = tqdm(total=num_batch_to_skip, disable=not accelerator.is_local_main_process)
             progress_bar.set_description(f"Epoch {epoch}")
 
-            for step, batch in enumerate(train_dataloader):
+            for batch_number, batch in enumerate(train_dataloader):
+                if batch_number > num_batch_to_skip:
+                    break
+
                 clean_images = batch['image']
                 # Sample noise to add to the images
                 noise = torch.randn(clean_images.shape).to(clean_images.device)

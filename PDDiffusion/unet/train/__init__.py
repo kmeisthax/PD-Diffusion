@@ -27,6 +27,7 @@ class TrainingOptions:
     #Data load strategy
     pin_data_in_memory: bool = field(default=False, metadata={"args": ["--pin_data_in_memory"], "help": "Force dataset to remain in CPU memory"})
     data_load_workers: int = field(default=0, metadata={"args": ["--data_load_workers"], "help": "Number of workers to load data with"})
+    image_limit: float = field(default=None, metadata={"args": ["--image_limit"], "help": "Number of images per batch to train"})
 
     #Conditional training options
     conditioned_on: str = field(default=None, metadata={"args": ["--conditioned_on"], "help": "Train a conditional model using this CLIP model's space as guidance."})
