@@ -1,6 +1,7 @@
 """Tokenizer vocabulary generator"""
 
-from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
+from PDDiffusion.datasets.WikimediaCommons import local_wikimedia_base
+from PDDiffusion.datasets.augment import all_labels_in_item
 
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
@@ -18,7 +19,7 @@ class TokenizerTrainingOptions:
 
 def label_extractor(dataset_gen):
     for item in dataset_gen:
-        yield item["text"]
+        yield all_labels_in_item(item)
 
 config = TokenizerTrainingOptions.parse_args(sys.argv[1:])
 
@@ -28,7 +29,7 @@ trainer = BpeTrainer(special_tokens=["[UNK]", "[PAD]", "[START]", "[END]"])
 
 tokenizer.pre_tokenizer = Whitespace()
 
-tokenizer.train_from_iterator(label_extractor(local_wikimedia(load_images=False)), trainer=trainer)
+tokenizer.train_from_iterator(label_extractor(local_wikimedia_base(load_images=False)), trainer=trainer)
 
 if not os.path.exists("output"):
     os.makedirs("output")

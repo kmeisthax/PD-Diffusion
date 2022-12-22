@@ -1,4 +1,5 @@
-from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
+from PDDiffusion.datasets.WikimediaCommons import local_wikimedia_base
+from PDDiffusion.datasets.augment import augment_labels
 
 from transformers import CLIPModel, CLIPTokenizer, CLIPFeatureExtractor, CLIPProcessor
 from datasets import Dataset
@@ -60,10 +61,10 @@ def transformer(image_size, processor):
 
     def transform(examples):
         images = [preprocess(image.convert("RGB")) for image in examples["image"]]
-        texts = processor.tokenizer(examples["text"], padding='max_length', truncation=True)
+        texts = processor.tokenizer(augment_labels(examples), padding='max_length', truncation=True)
         
         return {
-            "image": images, 
+            "image": images,
             "input_ids": texts.input_ids,
             "attention_mask": texts.attention_mask
         }
@@ -71,8 +72,8 @@ def transformer(image_size, processor):
     return transform
 
 def load_dataset_with_processor(image_size, processor):
-    dataset = Dataset.from_generator(local_wikimedia)
+    dataset = Dataset.from_generator(local_wikimedia_base)
 
-    dataset.set_transform(transformer(image_size, processor), columns=["image", "text"], output_all_columns=True)
+    dataset.set_transform(transformer(image_size, processor), output_all_columns=True)
 
     return dataset

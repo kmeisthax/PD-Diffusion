@@ -1,7 +1,6 @@
 import requests, urllib.request, glob, os.path, itertools, json, PIL
 from PIL import Image
 from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
-from collections import defaultdict
 
 LOCAL_STORAGE = os.path.join("sets", "wikimedia")
 LOCAL_RESIZE_CACHE = os.path.join("sets", "wikimedia-cache")
@@ -315,6 +314,12 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
     if not os.path.exists(resize_cache):
         os.makedirs(resize_cache)
     
+    #Datasets will absolutely not tolerate any raggedness in items, and even a
+    #defaultdict fails to correctly fix the problem, so we have to discover all
+    #the keys and then add them in later.
+    keys = set()
+    values = []
+    
     for file in itertools.chain(
             glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpg")),
             glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpeg")),
@@ -394,11 +399,20 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
 
             extracted["image"] = image
         
+        values.append(extracted)
+        
         for key in extracted.keys():
             if type(extracted[key]) is list:
                 extracted[key] = " ".join(extracted[key])
+            
+            keys.add(key)
+    
+    for value in values:
+        for key in keys:
+            if key not in value:
+                value[key] = ""
         
-        yield defaultdict(lambda: "", extracted)
+        yield value
 
 def local_wikimedia(limit = None, prohibited_categories=[], load_images=True, intended_maximum_size=512):
     """Load in training data previously downloaded by running this module's main.
