@@ -27,7 +27,7 @@ while len(unlabeled_images) > 0:
     unlabeled_images.remove(item)
     key = input(f"https://commons.wikimedia.org/wiki/{urllib.parse.quote(item['__pagetitle'].replace(' ', '_'))}")
 
-    if not scrape_and_save_metadata(conn, {"title": item["__pagetitle"], "pageid": item["__pageid"]}, rescrape=True):
+    if not scrape_and_save_metadata(conn, {"title": item["__pagetitle"], "pageid": int(item["__pageid"])}, rescrape=True):
         print("Warning: item not scraped")
 
     if key == "q":

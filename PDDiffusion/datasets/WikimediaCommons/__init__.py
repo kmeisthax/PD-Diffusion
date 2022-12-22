@@ -346,7 +346,7 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
                     continue
 
                 extracted["__pagetitle"] = metadata_obj["item"]["title"]
-                extracted["__pageid"] = metadata_obj["item"]["pageid"]
+                extracted["__pageid"] = str(metadata_obj["item"]["pageid"])
                 
                 try:
                     for key in metadata_obj["terms"].keys():
