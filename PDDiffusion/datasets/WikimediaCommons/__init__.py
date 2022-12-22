@@ -393,7 +393,10 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
 
             extracted["image"] = image
         
-        yield extracted
+        for key in extracted.keys():
+            if type(extracted[key]) is list:
+                extracted[key] = " ".join(extracted[key])
+        
 
 def local_wikimedia(limit = None, prohibited_categories=[], load_images=True, intended_maximum_size=512):
     """Load in training data previously downloaded by running this module's main.
