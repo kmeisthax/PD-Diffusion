@@ -1,6 +1,7 @@
 import requests, urllib.request, glob, os.path, itertools, json, PIL
 from PIL import Image
 from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
+from collections import defaultdict
 
 LOCAL_STORAGE = os.path.join("sets", "wikimedia")
 LOCAL_RESIZE_CACHE = os.path.join("sets", "wikimedia-cache")
@@ -397,6 +398,7 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
             if type(extracted[key]) is list:
                 extracted[key] = " ".join(extracted[key])
         
+        yield defaultdict(lambda: "", extracted)
 
 def local_wikimedia(limit = None, prohibited_categories=[], load_images=True, intended_maximum_size=512):
     """Load in training data previously downloaded by running this module's main.
