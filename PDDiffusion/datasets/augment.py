@@ -2,6 +2,13 @@
 
 import random, math
 
+INTERESTING_KEYS=[
+    "object type", "medium", "artist", "author", "date", "year", "title",
+    "genre", "description", "subject", "subjects", "depicted people", "place",
+    "depicted place", "depicted locations", "inscriptions", "technique",
+    "keywords", "note", "extra info", "__label", "__pagetitle"
+]
+
 def augment_labels(data_item):
     """Construct one or more randomly generated labels from the data in the data item.
     
@@ -27,7 +34,7 @@ def augment_labels(data_item):
     #Is there anything useful in other_fields_1, other_fields_2, other_versions?
     #type? extra info?
 
-    keys = list(filter(lambda k: k != "image" and k != "image_file_path" and k != "__pagetitle" and k != "__pageid" and data_item[k] != "", list(data_item.keys())))
+    keys = list(filter(lambda k: k in INTERESTING_KEYS and data_item[k] != "", list(data_item.keys())))
 
     max_range = 0
 
@@ -48,13 +55,6 @@ def augment_labels(data_item):
             elif i in data_item[key]:
                 out_value.append(data_item[key][i])
         
-        if len(out_value) == 0:
-            #Emergency case
-            if type(data_item["__pagetitle"]) == str:
-                out_value.append(data_item["__pagetitle"])
-            elif i in data_item["__pagetitle"]:
-                out_value.append(data_item["__pagetitle"][i])
-        
         output.append(", ".join(out_value))
     
     return output
@@ -62,7 +62,7 @@ def augment_labels(data_item):
 def all_labels_in_item(data_item):
     """Return all the labels in a data item."""
     
-    keys = filter(lambda k: k != "image" and k != "image_file_path" and k != "__pagetitle" and k != "__pageid" and data_item[k] != "", list(data_item.keys()))
+    keys = list(filter(lambda k: k in INTERESTING_KEYS and data_item[k] != "", list(data_item.keys())))
     max_range = 0
     for key in keys:
         if type(data_item[key]) == str or type(data_item[key]) == int:
@@ -79,13 +79,6 @@ def all_labels_in_item(data_item):
                 out_value.append(data_item[key])
             else:
                 out_value.append(data_item[key][i])
-        
-        if len(out_value) == 0:
-            #Emergency case
-            if type(data_item["__pagetitle"]) == str:
-                out_value.append(data_item["__pagetitle"])
-            elif i in data_item["__pagetitle"]:
-                out_value.append(data_item["__pagetitle"][i])
         
         labels.append(", ".join(out_value))
 
