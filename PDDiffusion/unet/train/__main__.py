@@ -86,7 +86,7 @@ def train_loop(config):
         #Calculate how much batch data to toss in order to meet our image limit
         num_batch_to_skip = len(train_dataloader)
         if config.image_limit is not None:
-            num_batch_to_skip = math.ceil(config.image_limit / batch_size)
+            num_batch_to_skip = min(num_batch_to_skip, math.ceil(config.image_limit / batch_size))
 
         # Now you train the model
         for epoch in range(progress["last_epoch"] + 1, config.num_epochs):
