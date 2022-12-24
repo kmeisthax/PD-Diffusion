@@ -17,6 +17,9 @@ def data_row_is_valid(data_item, i, key):
     if data_item[key] == "": #single item case
         return False
     
+    if i >= len(data_item[key]):
+        return False
+    
     if type(data_item) is not str and type(data_item) is not int and data_item[key][i] == "":
         return False
     
@@ -64,13 +67,20 @@ def augment_labels(data_item, min_range=0, max_range=None, num_augments=1):
     #Is there anything useful in other_fields_1, other_fields_2, other_versions?
     #type? extra info?
 
-    if max_range == None:
-        max_range = 0
-        for key in INTERESTING_KEYS:
-            if type(data_item[key]) == str or type(data_item[key]) == int:
-                max_range = max(max_range, 1)
-            else:
-                max_range = max(max_range, len(data_item[key]))
+    range_bounds = 0
+    for key in INTERESTING_KEYS:
+        if key not in data_item:
+            continue
+        
+        if type(data_item[key]) == str or type(data_item[key]) == int:
+            range_bounds = max(range_bounds, 1)
+        else:
+            range_bounds = max(range_bounds, len(data_item[key]))
+    
+    if max_range is None:
+        max_range = range_bounds
+    else:
+        max_range = min(max_range, range_bounds)
     
     output = []
     
