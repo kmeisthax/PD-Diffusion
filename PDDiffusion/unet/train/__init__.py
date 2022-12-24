@@ -1,4 +1,5 @@
-from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
+from PDDiffusion.datasets.WikimediaCommons import local_wikimedia_base
+from PDDiffusion.datasets.augment import augment_labels
 from PDDiffusion.image_loader import load_dataset, convert_and_augment_pipeline, transformer
 from PDDiffusion.unet.test import load_pretrained_unet
 from PDDiffusion.unet.pipeline import DDPMConditionalPipeline
@@ -166,7 +167,7 @@ def load_dataset_with_condition(config, accelerator):
     if config.conditioned_on is None:
         return (load_dataset(config.image_size), None)
     
-    dataset = Dataset.from_generator(local_wikimedia)
+    dataset = Dataset.from_generator(local_wikimedia_base)
 
     transform = transformer(config.image_size)
 
@@ -177,29 +178,47 @@ def load_dataset_with_condition(config, accelerator):
         #Extract the config outside of the batched/no-grad area
         cond_config = cond_model.config
 
-        def clip_classify(images, text):
+        def clip_classify(data_items, num_augments = 4):
+            """Computes CLIP vectors for all data items in the model.
+            
+            Intended to be used as a datasets map function, called with all the
+            data in one go. Batches calculations internally.
+            
+            Inserts a new column into the output called "condition". This is a
+            Torch tensor of dimension (d, 2a, c):
+            
+             - *d* refers to the number of Data items in the dataset
+             - *a* refers to the number of Augments calculated per dataset item
+                   (we generate both an image and text side vector per augment)
+             - *c* refers to the length of CLIP's output vector
+            
+            By default, we prepare four image augments and four text augments.
+            These are calcluated by shuffling the text parameters around with
+            augment_labels, and the images around with clip_preprocess, which
+            applies flips to the image."""
             nonlocal cond_model
 
             cond_model = accelerator.prepare(cond_model)
 
-            @find_executable_batch_size(starting_batch_size=config.train_batch_size)
+            clip_batch_size = config.train_batch_size * 16
+
+            @find_executable_batch_size(starting_batch_size=clip_batch_size)
             def inner_batch(batch_size):
-                progress_bar = tqdm(total=math.ceil(len(images) / batch_size), disable=not accelerator.is_local_main_process)
+                progress_bar = tqdm(total=math.ceil(len(data_items["image"]) / batch_size), disable=not accelerator.is_local_main_process)
                 progress_bar.set_description(f"CLIP Image Processing")
 
-                conditions_image = []
-                conditions_text = []
+                conditions = []
 
                 if str(cond_model.device).startswith("cuda:"):
                     progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
 
-                for i in range(0, len(images), batch_size):
+                for i in range(0, len(data_items["image"]), batch_size):
                     if str(cond_model.device).startswith("cuda:"):
                         progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
                     
-                    clip_images = [clip_preprocess(Image.open(image["path"]).convert("RGB")) for image in images[i:i+batch_size]]
+                    clip_images = [clip_preprocess(image.convert("RGB")) for _ in range(0, num_augments) for image in data_items["image"][i:i+batch_size]]
                     encoded_images = cond_processor(images=clip_images, return_tensors="pt")["pixel_values"]
-                    encoded_text = cond_processor(text=text[i:i+batch_size], padding='max_length', truncation=True, max_length=cond_model.text_model.config.max_position_embeddings)
+                    encoded_text = cond_processor(text=augment_labels(data_items, i, i+batch_size, num_augments), padding='max_length', truncation=True, max_length=cond_model.text_model.config.max_position_embeddings)
 
                     encoded_text_ids = torch.tensor(encoded_text["input_ids"])
                     encoded_text_mask = torch.tensor(encoded_text["attention_mask"])
@@ -210,8 +229,8 @@ def load_dataset_with_condition(config, accelerator):
                         encoded_text_mask = encoded_text_mask.to(cond_model.device)
                     
                     condition = cond_model(input_ids=encoded_text_ids, attention_mask=encoded_text_mask, pixel_values=encoded_images)
-                    image_embeds = condition.image_embeds
-                    text_embeds = condition.text_embeds
+                    image_embeds = condition.image_embeds.reshape(condition.image_embeds.shape[0] // num_augments, num_augments, *list(condition.image_embeds.shape[1:]))
+                    text_embeds = condition.text_embeds.reshape(condition.image_embeds.shape[0] // num_augments, num_augments, *list(condition.text_embeds.shape[1:]))
 
                     if config.mixed_precision == "fp16":
                         image_embeds = image_embeds.type(torch.float16)
@@ -224,8 +243,7 @@ def load_dataset_with_condition(config, accelerator):
                         text_embeds = text_embeds.type(torch.float32)
                     
                     for (image_row, text_row) in zip(image_embeds, text_embeds):
-                        conditions_image.append(image_row)
-                        conditions_text.append(text_row)
+                        conditions.append(torch.concat((image_row, text_row)))
                     
                     progress_bar.update(1)
                 
@@ -235,25 +253,16 @@ def load_dataset_with_condition(config, accelerator):
                     progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
                 
                 return {
-                    "image": images,
-                    "text": text,
-                    "condition_image": conditions_image,
-                    "condition_text": conditions_text,
+                    "image": data_items["image"],
+                    "conditions": conditions,
                 }
             
             return inner_batch()
         
-        current_fp_type = "float32"
-        if config.mixed_precision == "fp16":
-            current_fp_type = "float16"
-        elif config.mixed_precision == "bf16":
-            current_fp_type = "bfloat16" #TODO: not actually a documented FP type in Huggingface Datasets and I don't have an Ampere GPU to test
-        
         dataset = dataset.map(clip_classify,
-            input_columns=["image", "text"],
+            input_columns=None,
             batched=True,
-            batch_size=None,
-            features=Features({"condition_image": [Value(current_fp_type)], "condition_text": [Value(current_fp_type)], "image": DatasetsImage(), "image_file_path": Value("string"), "text": Value("string")}))
+            batch_size=None)
         dataset.set_transform(transform, columns=["image"], output_all_columns=True)
 
         return (dataset, cond_config)

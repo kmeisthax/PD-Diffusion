@@ -115,25 +115,27 @@ def train_loop(config):
                     }
                     if config.conditioned_on is not None:
                         # The stack operation unflips the dataset CLIP vectors.
-                        # For some reason, batching turns 16 512-wide CLIP vectors
-                        # into one 512x16 (ish) vector.
-                        # The unsqueeze adds a dimension because Cross Attention
-                        # blocks support multiple condition inputs per batch.
+                        # For some reason, batching turns a list of 16 8x512
+                        # CLIP tensors into a list of 8 lists of 512 16-wide
+                        # vectors. This requires some transpositions in order
+                        # to work as intended.
+                        conditions = torch.stack([torch.stack(augment) for augment in batch["conditions"]]).transpose(2, 0).transpose(1, 2)
 
-                        cond_text = batch["condition_text"]
-                        cond_image = batch["condition_image"]
+                        # We need to shuffle our augments around. We also have
+                        # to provide an extra dimension for the multiple heads
+                        # of our cross-attention block. So let's just do both
+                        # at the same time.
+                        index = (torch.rand(conditions.shape[0], model.config.attention_head_dim) * conditions.shape[1]) \
+                            .type(torch.int64).unsqueeze(2) \
+                            .repeat(1, 1, conditions.shape[2]) \
+                            .to(conditions.device)
+                        conditions = torch.gather(conditions, 1, index)
 
                         if config.mixed_precision == "no":
                             #bonus points: fp32 gets magically turned into fp64
-                            cond_text = torch.stack(cond_text, 1).unsqueeze(1).type(torch.float32)
-                            cond_image = torch.stack(cond_image, 1).unsqueeze(1).type(torch.float32)
-                        else:
-                            cond_text = torch.stack(cond_text, 1).unsqueeze(1)
-                            cond_image = torch.stack(cond_image, 1).unsqueeze(1)
+                            conditions = conditions.type(torch.float32)
                         
-                        #Shuffle the condition vectors around.
-                        shuffle = torch.round(torch.rand(cond_text.shape[0], dtype=cond_text.dtype, device=cond_text.device)).unsqueeze(1)
-                        parameters["encoder_hidden_states"] = cond_text * shuffle + cond_image * -(shuffle - 1)
+                        parameters["encoder_hidden_states"] = conditions
 
                     # Predict the noise residual
                     noise_pred = model(noisy_images, timesteps, **parameters)[0]
