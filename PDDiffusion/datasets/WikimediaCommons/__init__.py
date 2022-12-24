@@ -328,7 +328,7 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
             glob.iglob(os.path.join(LOCAL_STORAGE, "*.tiff"))
         ):
         if limit is not None and count > limit:
-            return
+            break
         
         count += 1
 
