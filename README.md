@@ -144,6 +144,22 @@ Finally, you can install the rest of the dependencies with:
 pip install -r requirements.txt
 ```
 
+### Setting up a database
+
+PDDiffusion requires a SQL database to store scraped information in. To set that up, first create a .env file with a DATABASE_CONNECTION variable in it. The variable should be populated with a database connection string, valid formats include:
+
+```
+sqlite+pysqlite:///<path to the database to use>
+```
+
+Then type:
+
+```
+python -m PDDiffusion.datasets.setup
+```
+
+to set up your database.
+
 ## Downloading datasets
 
 We currently support one data set: Wikimedia Commons, which is well-curated and has very detailed rights usage information.

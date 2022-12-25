@@ -1,5 +1,16 @@
+#Python Virtual Environments
 env
 conda_env
+
+#Sensitive configuration
+.env
+
+#Stored data
+*.sqlite
 sets
+
+#Python floatsam
 __pycache__
+
+#Generated models
 output
