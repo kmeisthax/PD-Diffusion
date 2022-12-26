@@ -1,15 +1,13 @@
-import requests, urllib.request, glob, os.path, itertools, json, PIL
+import requests, urllib.request, os.path, json, PIL
 from PIL import Image
-from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
-from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage
-from PDDiffusion.datasets.model import Dataset, DatasetImage, DatasetLabel, File
+from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage, BASE_API_ENDPOINT
+from PDDiffusion.datasets.model import DatasetLabel, File
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 LOCAL_STORAGE = os.path.join("sets", "wikimedia")
 LOCAL_RESIZE_CACHE = os.path.join("sets", "wikimedia-cache")
-BASE_API_ENDPOINT = "https://commons.wikimedia.org/w/api.php"
 
 DEFAULT_UA = "PD-Diffusion/0.0"
 
@@ -330,7 +328,7 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
 
         count = 0
 
-        for (image, article) in session.execute(select(DatasetImage, WikimediaCommonsImage).join_from(DatasetImage, WikimediaCommonsImage, DatasetImage.id == WikimediaCommonsImage.id, DatasetImage.dataset_id == WikimediaCommonsImage.dataset_id).where(DatasetImage.dataset_id == f"WikimediaCommons:{BASE_API_ENDPOINT}")):
+        for (image, article) in session.execute(WikimediaCommonsImage.select_all_image_articles(session)):
             if limit is not None and count > limit:
                 break
             

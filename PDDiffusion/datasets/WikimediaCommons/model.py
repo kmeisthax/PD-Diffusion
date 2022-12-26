@@ -1,8 +1,10 @@
 """"""
 
-from PDDiffusion.datasets.model import Base
-from sqlalchemy import Column, String, Integer, ForeignKey, ForeignKeyConstraint, JSON, DateTime
+from PDDiffusion.datasets.model import Base, DatasetImage
+from sqlalchemy import Column, String, Integer, ForeignKey, ForeignKeyConstraint, JSON, DateTime, select
 from sqlalchemy.orm import relationship
+
+BASE_API_ENDPOINT = "https://commons.wikimedia.org/w/api.php"
 
 class WikimediaCommonsImage(Base):
     """A dataset image extracted from a Wikimedia Commons File: article."""
@@ -21,3 +23,15 @@ class WikimediaCommonsImage(Base):
     wikidata = Column(JSON)
 
     base_image = relationship("DatasetImage")
+    
+    def select_all_image_articles(session):
+        """Given a database session, select all the articles that are also images.
+        
+        Returns an iterable that yields both the dataset image and the Wikimedia
+        Commons article data in a tuple."""
+        return session.execute(
+            select(DatasetImage, WikimediaCommonsImage)
+                .join_from(DatasetImage, WikimediaCommonsImage,
+                    DatasetImage.id == WikimediaCommonsImage.id, DatasetImage.dataset_id == WikimediaCommonsImage.dataset_id)
+                .where(DatasetImage.dataset_id == f"WikimediaCommons:{BASE_API_ENDPOINT}")
+        )
