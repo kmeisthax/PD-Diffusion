@@ -1,7 +1,7 @@
 """Dataset index tables"""
 
 from sqlalchemy.orm import registry, relationship
-from sqlalchemy import Column, String, Integer, ForeignKey
+from sqlalchemy import Column, String, Integer, ForeignKey, ForeignKeyConstraint
 
 mapper_registry = registry()
 Base = mapper_registry.generate_base()
@@ -49,6 +49,7 @@ class DatasetImage(Base):
 
     dataset = relationship("Dataset", back_populates="images")
     file = relationship("File", back_populates="dataset_image")
+    labels = relationship("DatasetLabel", back_populates="dataset_image")
 
     def __repr__(self):
         return f"DatasetImage(id={self.id!r}, dataset_id={self.dataset_id!r})"
@@ -72,4 +73,28 @@ class File(Base):
     LOCAL_FILE="local"
 
     def __repr__(self):
-        return f"File(id={self.id!r}, storage_type={self.storage_type!r}, url={self.url!r}"
+        return f"File(id={self.id!r}, storage_type={self.storage_type!r}, url={self.url!r})"
+
+class DatasetLabel(Base):
+    """A single piece of label data associated with an image.
+    
+    Images may have multiple labels; the data_key field distinguishes betweeen
+    the two. The meaning of label keys and values is determined primarily by
+    the source dataset, with the one stipulation being that label values must
+    be suitable for training CLIP on."""
+
+    __tablename__ = "datasetlabel"
+    __table_args__ = (
+        ForeignKeyConstraint(["image_id", "dataset_id"], ["datasetimage.id", "datasetimage.dataset_id"]),
+    )
+
+    image_id = Column(String, primary_key=True)
+    dataset_id = Column(String, ForeignKey("dataset.id"), primary_key=True)
+    data_key = Column(String, primary_key=True)
+
+    value = Column(String)
+
+    dataset_image = relationship("DatasetImage", back_populates="labels")
+
+    def __repr__(self):
+        return f"DatasetLabel(image_id={self.image_id!r}, dataset_id={self.dataset_id!r}, data_key={self.data_key!r}, value={self.value!r})"

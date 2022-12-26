@@ -1,9 +1,9 @@
 """Utility to transfer Wikimedia Commons data from the flat-file system to SQL."""
 
 from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
-from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage, WikimediaCommonsData
+from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage
 from PDDiffusion.datasets.WikimediaCommons import LOCAL_STORAGE, BASE_API_ENDPOINT
-from PDDiffusion.datasets.model import Dataset, DatasetImage, File
+from PDDiffusion.datasets.model import Dataset, DatasetImage, File, DatasetLabel
 from argparse_dataclass import dataclass
 from dataclasses import field
 from sqlalchemy import create_engine
@@ -16,7 +16,7 @@ class TransferOptions:
     verbose: bool = field(default=False, metadata={"args": ["--verbose"], "help": "Log SQL statements as they execute"})
 
 options = TransferOptions.parse_args(sys.argv[1:])
-env = load_dotenv()
+load_dotenv()
 engine = create_engine(os.getenv("DATABASE_CONNECTION"), echo=options.verbose, future=True)
 
 with Session(engine) as session:
@@ -52,7 +52,7 @@ with Session(engine) as session:
                 extracts.update(extract_information_from_wikitext(xmlstr))
             
             for key in extracts.keys():
-                wiki_data = WikimediaCommonsData(image_id=ds_image.id, dataset_id=ds_image.id, data_key=key, value=extracts[key])
+                wiki_data = DatasetLabel(image_id=ds_image.id, dataset_id=ds_image.dataset_id, data_key=key, value=extracts[key])
                 session.add(wiki_data)
     
     session.commit()

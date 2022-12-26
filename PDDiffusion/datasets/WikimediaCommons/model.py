@@ -21,18 +21,3 @@ class WikimediaCommonsImage(Base):
     wikidata = Column(JSON)
 
     base_image = relationship("DatasetImage")
-
-class WikimediaCommonsData(Base):
-    """A single piece of text data extracted from Wikimedia Commons wikidata."""
-
-    __tablename__ = "wikimediacommons_data"
-    __table_args__ = (
-        ForeignKeyConstraint(["image_id", "dataset_id"], ["datasetimage.id", "datasetimage.dataset_id"]),
-        ForeignKeyConstraint(["image_id", "dataset_id"], ["wikimediacommons_image.id", "wikimediacommons_image.dataset_id"]),
-    )
-
-    image_id = Column(String, primary_key=True)
-    dataset_id = Column(String, ForeignKey("dataset.id"), primary_key=True)
-    data_key = Column(String, primary_key=True)
-
-    value = Column(String)
