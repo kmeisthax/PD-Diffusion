@@ -28,10 +28,9 @@ class WikimediaCommonsImage(Base):
         """Given a database session, select all the articles that are also images.
         
         Returns an iterable that yields both the dataset image and the Wikimedia
-        Commons article data in a tuple."""
+        Commons article data in a tuple. Order is article, image."""
         return session.execute(
-            select(DatasetImage, WikimediaCommonsImage)
-                .join_from(DatasetImage, WikimediaCommonsImage,
-                    DatasetImage.id == WikimediaCommonsImage.id, DatasetImage.dataset_id == WikimediaCommonsImage.dataset_id)
+            select(WikimediaCommonsImage, DatasetImage)
+                .join_from(WikimediaCommonsImage, DatasetImage, WikimediaCommonsImage.base_image)
                 .where(DatasetImage.dataset_id == f"WikimediaCommons:{BASE_API_ENDPOINT}", DatasetImage.is_banned == False)
         )

@@ -14,7 +14,7 @@ load_dotenv()
 engine = create_engine(os.getenv("DATABASE_CONNECTION"), future=True)
 
 with Session(engine) as session:
-    for (image, article) in WikimediaCommonsImage.select_all_image_articles(session):
+    for (article, image) in WikimediaCommonsImage.select_all_image_articles(session):
         if image.file.storage_provider != File.LOCAL_FILE:
             print(f"Non-local file provider {image.file.storage_provider}")
 
