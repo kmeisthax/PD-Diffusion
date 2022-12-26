@@ -47,6 +47,10 @@ with Session(engine) as session:
             session.add(wiki_image)
 
             extracts = {}
+            if "terms" in metadata_obj:
+                for key in metadata_obj["terms"].keys():
+                    extracts[f"__{key}"] = ", ".join(metadata_obj["terms"][key])
+
             for name in metadata_obj["parsetree"]:
                 xmlstr = metadata_obj["parsetree"][name]
                 extracts.update(extract_information_from_wikitext(xmlstr))
