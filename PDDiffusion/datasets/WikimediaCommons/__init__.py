@@ -1,6 +1,11 @@
 import requests, urllib.request, glob, os.path, itertools, json, PIL
 from PIL import Image
 from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
+from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage
+from PDDiffusion.datasets.model import Dataset, DatasetImage, DatasetLabel, File
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session
 
 LOCAL_STORAGE = os.path.join("sets", "wikimedia")
 LOCAL_RESIZE_CACHE = os.path.join("sets", "wikimedia-cache")
@@ -307,112 +312,94 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
     
     If load_images is enabled, PIL image data will be provided. Images will be
     shrunk to fit the intended_maximum_size and stored on disk."""
-    
-    count = 0
 
     resize_cache = os.path.join(LOCAL_RESIZE_CACHE, str(intended_maximum_size))
     if not os.path.exists(resize_cache):
         os.makedirs(resize_cache)
     
-    #Datasets will absolutely not tolerate any raggedness in items, and even a
-    #defaultdict fails to correctly fix the problem, so we have to discover all
-    #the keys and then add them in later.
-    keys = set()
-    values = []
-    
-    for file in itertools.chain(
-            glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpg")),
-            glob.iglob(os.path.join(LOCAL_STORAGE, "*.jpeg")),
-            glob.iglob(os.path.join(LOCAL_STORAGE, "*.png")),
-            glob.iglob(os.path.join(LOCAL_STORAGE, "*.tif")),
-            glob.iglob(os.path.join(LOCAL_STORAGE, "*.tiff"))
-        ):
-        if limit is not None and count > limit:
-            break
-        
-        count += 1
+    load_dotenv()
+    engine = create_engine(os.getenv("DATABASE_CONNECTION"), future=True)
 
-        extracted = {}
-        if os.path.exists(file + ".json"):
-            with open(file + ".json", "r") as metadata:
-                metadata_obj = json.load(metadata)
-                is_prohibited = False
+    with Session(engine) as session:
+        #Datasets will absolutely not tolerate any raggedness in items, and even a
+        #defaultdict fails to correctly fix the problem. We have to grab all the
+        #keys first so we know to add empty strings to things
+        keys = set()
+        for (key,) in session.execute(select(DatasetLabel.data_key).group_by(DatasetLabel.data_key)):
+            keys.add(key)
 
-                if "categories" in metadata_obj:
-                    for category in metadata_obj["categories"]:
-                        if category["title"] in prohibited_categories:
-                            print("{} is prohibited".format(category["title"]))
-                            is_prohibited = True
-                            break
-                else:
-                    #TODO: When scraping we should ensure "no categories" is represented as an empty list
-                    print(f"{metadata_obj['item']['title']} has no categories")
-                
-                if is_prohibited:
-                    continue
+        count = 0
 
-                extracted["__pagetitle"] = metadata_obj["item"]["title"]
-                extracted["__pageid"] = str(metadata_obj["item"]["pageid"])
-                
-                try:
-                    for key in metadata_obj["terms"].keys():
-                        extracted[f"__{key}"] = ", ".join(metadata_obj["terms"][key])
-                except:
-                    pass
-                
-                for name in metadata_obj["parsetree"]:
-                    xmlstr = metadata_obj["parsetree"][name]
+        for (image, article) in session.execute(select(DatasetImage, WikimediaCommonsImage).join_from(DatasetImage, WikimediaCommonsImage, DatasetImage.id == WikimediaCommonsImage.id, DatasetImage.dataset_id == WikimediaCommonsImage.dataset_id).where(DatasetImage.dataset_id == f"WikimediaCommons:{BASE_API_ENDPOINT}")):
+            if limit is not None and count > limit:
+                break
+            
+            count += 1
 
-                    try:
-                        extracted.update(extract_information_from_wikitext(xmlstr))
-                    except Exception as e:
-                        pass
-        
-        extracted["image_file_path"] = os.path.abspath(file)
-        
-        if load_images:
-            #Check if our image has been resized down already, and if so use it.
-            resized_file = os.path.join(resize_cache, os.path.basename(file))
-            if os.path.exists(resized_file) and image_is_valid(resized_file):
-                file = resized_file
+            extracted = {}
+            metadata_obj = article.wikidata
+
+            is_prohibited = False
+
+            if "categories" in metadata_obj:
+                for category in metadata_obj["categories"]:
+                    if category["title"] in prohibited_categories:
+                        print("{} is prohibited".format(category["title"]))
+                        is_prohibited = True
+                        break
             else:
-                if not image_is_valid(file):
-                    #Rename the file and its metadata for later inspection
-                    os.rename(file, file + '.banned')
-                    os.rename(file + '.json', file + '.bannedmetadata')
+                #TODO: When scraping we should ensure "no categories" is represented as an empty list
+                print(f"{metadata_obj['item']['title']} has no categories")
+            
+            if is_prohibited:
+                continue
 
-                    continue
-                
-                #Otherwise check if this image is too large and if so, downscale.
-                image = Image.open(file)
-                if image.width > intended_maximum_size or image.height > intended_maximum_size:
-                    image.thumbnail((intended_maximum_size, intended_maximum_size))
-                    image.save(resized_file)
-                    image.close()
+            extracted["__pagetitle"] = metadata_obj["item"]["title"]
+            extracted["__pageid"] = str(metadata_obj["item"]["pageid"])
 
+            if image.file.storage_provider != File.LOCAL_FILE:
+                print(f"Non-local file provider {image.file.storage_provider}")
+
+            file = image.file.url
+            extracted["image_file_path"] = os.path.abspath(file)
+
+            for label in image.labels:
+                extracted[label.data_key] = label.value
+            
+            if load_images:
+                #Check if our image has been resized down already, and if so use it.
+                resized_file = os.path.join(resize_cache, os.path.basename(file))
+                if os.path.exists(resized_file) and image_is_valid(resized_file):
                     file = resized_file
                 else:
-                    image.close()
-            
-            image = Image.open(os.path.abspath(file))
-            image.close()
+                    if not image_is_valid(file):
+                        #Rename the file and its metadata for later inspection
+                        os.rename(file, file + '.banned')
+                        os.rename(file + '.json', file + '.bannedmetadata')
 
-            extracted["image"] = image
-        
-        values.append(extracted)
-        
-        for key in extracted.keys():
-            if type(extracted[key]) is list:
-                extracted[key] = " ".join(extracted[key])
+                        continue
+                    
+                    #Otherwise check if this image is too large and if so, downscale.
+                    image = Image.open(file)
+                    if image.width > intended_maximum_size or image.height > intended_maximum_size:
+                        image.thumbnail((intended_maximum_size, intended_maximum_size))
+                        image.save(resized_file)
+                        image.close()
+
+                        file = resized_file
+                    else:
+                        image.close()
+                
+                image = Image.open(os.path.abspath(file))
+                image.close()
+
+                extracted["image"] = image
             
-            keys.add(key)
-    
-    for value in values:
-        for key in keys:
-            if key not in value:
-                value[key] = ""
-        
-        yield value
+            for key in keys:
+                if key not in extracted:
+                    extracted[key] = ""
+            
+            yield extracted
 
 def local_wikimedia(limit = None, prohibited_categories=[], load_images=True, intended_maximum_size=512):
     """Load in training data previously downloaded by running this module's main.
