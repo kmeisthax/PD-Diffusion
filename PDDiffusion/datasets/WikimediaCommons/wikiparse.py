@@ -827,7 +827,7 @@ def extract_other_fields_from_value(value, warn=False, preferred_lang="en"):
             
             value = ""
         
-        extra_params[name] = [value]
+        extra_params[name] = value
     
     return extra_params
 
