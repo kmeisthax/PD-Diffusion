@@ -68,5 +68,8 @@ class File(Base):
 
     dataset_image = relationship("DatasetImage", back_populates="file")
 
+    #Indicates a local file. URL is the image filename.
+    LOCAL_FILE="local"
+
     def __repr__(self):
         return f"File(id={self.id!r}, storage_type={self.storage_type!r}, url={self.url!r}"
