@@ -33,5 +33,5 @@ class WikimediaCommonsImage(Base):
             select(DatasetImage, WikimediaCommonsImage)
                 .join_from(DatasetImage, WikimediaCommonsImage,
                     DatasetImage.id == WikimediaCommonsImage.id, DatasetImage.dataset_id == WikimediaCommonsImage.dataset_id)
-                .where(DatasetImage.dataset_id == f"WikimediaCommons:{BASE_API_ENDPOINT}")
+                .where(DatasetImage.dataset_id == f"WikimediaCommons:{BASE_API_ENDPOINT}", DatasetImage.is_banned == False)
         )

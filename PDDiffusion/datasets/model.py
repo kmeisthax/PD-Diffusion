@@ -1,7 +1,7 @@
 """Dataset index tables"""
 
 from sqlalchemy.orm import registry, relationship
-from sqlalchemy import Column, String, Integer, ForeignKey, ForeignKeyConstraint
+from sqlalchemy import Column, String, Integer, ForeignKey, ForeignKeyConstraint, Boolean
 
 mapper_registry = registry()
 Base = mapper_registry.generate_base()
@@ -47,12 +47,15 @@ class DatasetImage(Base):
     dataset_id = Column(String, ForeignKey("dataset.id"), primary_key=True)
     file_id = Column(Integer, ForeignKey("file.id"))
 
+    #Image is too large to process, or corrupted.
+    is_banned = Column(Boolean, default=False, nullable=False)
+
     dataset = relationship("Dataset", back_populates="images")
     file = relationship("File", back_populates="dataset_image")
     labels = relationship("DatasetLabel", back_populates="dataset_image")
 
     def __repr__(self):
-        return f"DatasetImage(id={self.id!r}, dataset_id={self.dataset_id!r})"
+        return f"DatasetImage(id={self.id!r}, dataset_id={self.dataset_id!r}, is_banned={self.is_banned!r})"
 
 class File(Base):
     """A single file.
