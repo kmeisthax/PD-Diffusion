@@ -1,7 +1,8 @@
 import requests, urllib.request, os.path, json, PIL
 from PIL import Image
+from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
 from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage, BASE_API_ENDPOINT
-from PDDiffusion.datasets.model import DatasetLabel, File
+from PDDiffusion.datasets.model import Dataset, DatasetImage, DatasetLabel, File
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -138,14 +139,36 @@ def image_is_valid(file):
         print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
         return False
 
-def scrape_and_save_metadata(conn, item=None, localfile=None, rescrape=False):
+def extract_labels_for_article(session, article):
+    """Extract labels from a Wikimedia Commons article and store them in its associated image."""
+
+    for label in article.base_image.labels:
+        session.delete(label)
+    
+    session.flush()
+
+    extracts = {}
+    if "terms" in article.wikidata:
+        for key in article.wikidata["terms"].keys():
+            extracts[f"__{key}"] = ", ".join(article.wikidata["terms"][key])
+
+    for name in article.wikidata["parsetree"]:
+        xmlstr = article.wikidata["parsetree"][name]
+        extracts.update(extract_information_from_wikitext(xmlstr))
+    
+    for key in extracts.keys():
+        article.base_image.labels.append(DatasetLabel(image_id=article.id, dataset_id=article.dataset_id, data_key=key, value=extracts[key]))
+
+def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=False):
     """Scrape data from the Wikimedia connection and item to the local file path given.
+
+    Conn is the current Mediawiki API connection and session is the current
+    database connection.
     
     Item must be a dict with "title" and "pageid" keys matching the item to
-    download. Localfile must be a valid filesystem path. If not provided, we
-    will attempt to recover it from the title in the stored metadata. If you
-    are scraping from a Mediawiki server, the `walk_category` method of
-    `Connection` will provide item dicts for you.
+    download. Localdata must be a valid pair of database article and image
+    objects, if provided. If you are scraping from a Mediawiki server, the
+    `walk_category` method of `Connection` will provide item dicts for you.
     
     Returns True if the file scraped successfully and new data was obtained.
     False indicates one of the following possible error conditions:
@@ -155,57 +178,48 @@ def scrape_and_save_metadata(conn, item=None, localfile=None, rescrape=False):
     
     If you are enforcing a scrape limit, be sure not to count failures against
     that limit."""
-    
-    if localfile is None:
+
+    if localdata is None:
         if item is None:
-            raise Exception("Must specify one of item or localfile when scraping")
-        
-        localfile = item["title"].removeprefix("File:").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
-        localfile = os.path.join(LOCAL_STORAGE, localfile)
-
-    metadatafile = localfile + '.json'
-
-    if os.path.exists(localfile + ".banned") or os.path.exists(localfile + ".bannedmetadata"):
-        #Skip downloaded files that were banned from the training set.
-        #Images can be banned either because they were too large to decode,
-        #or because the file could not be decoded in PIL.
-        return False
+            raise Exception("Must specify one of item or localdata when scraping")
 
     true_item_name = None
     true_pageid = None
     if item is not None:
         true_item_name = item["title"]
         true_pageid = item["pageid"]
+    else:
+        (article, _image) = localdata
+        true_item_name = article.id
+        true_pageid = article.post_id
     
-    file_already_exists = os.path.exists(localfile)
-    metadata_already_exists = os.path.exists(metadatafile)
-    if metadata_already_exists:
-        #Check if we need to re-scrape categories or wikitext
-        with open(metadatafile, 'r') as source:
-            source_data = json.load(source)
+    file_already_exists = False
+    metadata_already_exists = False
+    if localdata is not None:
+        (article, image) = localdata
 
-            if "categories" not in source_data or "parsetree" not in source_data:
+        if image.file is not None:
+            file_already_exists = True
+        
+        if article.wikidata is not None:
+            metadata_already_exists = True
+
+            # Check if any bits of data are missing from our Wiki scrape.
+            # If so, force a redownload.
+            if "categories" not in article.wikidata or "parsetree" not in article.wikidata:
                 metadata_already_exists = False
             
-            if "timestamp" not in source_data or "revisions" not in source_data:
+            if "timestamp" not in article.wikidata or "revisions" not in article.wikidata:
                 metadata_already_exists = False
-            
-            if "item" in source_data:
-                true_item_name = source_data["item"]["title"]
-                true_pageid = source_data["item"]["pageid"]
-            else:
-                #Attempt to recover the page name from the stripped titles we
-                #saved in earlier runs. We only ever stored file metadata in
-                #this state, so we can assume what we stored earlier was files.
-                ext = os.path.splitext(localfile)[1]
-                if not source_data["title"].endswith(ext):
-                    true_item_name = f"File:{source_data['title']}{ext}"
-                else:
-                    #Some of our data has file extensions and some of it doesn't
-                    #We should probably discontinue use of the stripped title field
-                    true_item_name = f"File:{source_data['title']}"
-                
-                metadata_already_exists = False
+        
+        if article.last_edited is None:
+            metadata_already_exists = False
+
+        if image.is_banned:
+            #Skip downloaded files that were banned from the training set.
+            #Images can be banned either because they were too large to decode,
+            #or because the file could not be decoded in PIL.
+            return False
     
     if rescrape:
         #Rescrapes ALWAYS trigger a metadata redownload.
@@ -213,45 +227,45 @@ def scrape_and_save_metadata(conn, item=None, localfile=None, rescrape=False):
     
     #TODO: Handle redirects.
     #File:Gérard - Eugène de Beauharnais 1.jpg is an example redirect
-
-    if true_item_name is None:
-        raise Exception(f"Local metadata file {localfile} does not exist and there is no page title to work with")
-    
-    if true_pageid is None:
-        #We can recover from this, too.
-        #Just store the first page ID we see.
-        pageinfo = conn.info(titles=[true_item_name])
-        for pageid in pageinfo["query"]["pages"].keys():
-            if true_pageid is not None:
-                raise Exception(f"Local metadata file {localfile} does not have an unambiguous page ID")
-
-            true_pageid = pageid
-        
-        if true_pageid is None:
-            raise Exception(f"Local metadata file {localfile} has been deleted")
     
     if file_already_exists and metadata_already_exists:
         return False
     
     print(true_item_name)
+
+    #At this point, we need database objects to write to.
+    if localdata is not None:
+        (article, image) = localdata
+    else:
+        dataset_id = f"WikimediaCommons:{conn.base_api_endpoint}"
+
+        image = DatasetImage(dataset_id=dataset_id, id=true_item_name)
+        article = WikimediaCommonsImage(dataset_id=dataset_id, id=true_item_name, post_id=true_pageid)
+
+        session.add(image)
+        session.add(article)
     
     image_info = conn.image_info(titles=[true_item_name], iiprop=["url", "size"])["query"]["pages"][str(true_pageid)]["imageinfo"]
-    image_is_banned = False
-    for image in image_info:
-        if image["size"] > Image.MAX_IMAGE_PIXELS:
+    for image_data in image_info:
+        if image_data["size"] > Image.MAX_IMAGE_PIXELS:
             #Don't even download the file, just mark the metadata as banned
-            metadatafile = localfile + '.bannedmetadata'
-            image_is_banned = True
+            image.is_banned = True
             break
 
         if not file_already_exists:
+            localfile = true_item_name.removeprefix("File:").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
+            localfile = os.path.join(LOCAL_STORAGE, localfile)
+
             with conn.urlopen(image["url"]) as source:
                 with open(localfile, "wb") as sink:
                     sink.write(source.read())
             
+            image.file = File(storage_provider=File.LOCAL_FILE, url=localfile)
+            session.add(image.file)
+            
             if not image_is_valid(localfile):
                 os.rename(localfile, localfile + ".banned")
-                image_is_banned = True
+                image.is_banned = True
     
     if not metadata_already_exists:
         metadata = {}
@@ -296,10 +310,11 @@ def scrape_and_save_metadata(conn, item=None, localfile=None, rescrape=False):
         
         metadata["imageinfo"] = image_info
         
-        with open(metadatafile, 'w') as sink:
-            sink.write(json.dumps(metadata))
+        article.wikidata = metadata
+
+        extract_labels_for_article(session, article)
     
-    return not image_is_banned
+    return not image.is_banned
 
 def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=True, intended_maximum_size=512):
     """Load in training data previously downloaded by running this module's main.

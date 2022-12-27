@@ -1,6 +1,6 @@
 """Utility to transfer Wikimedia Commons data from the flat-file system to SQL."""
 
-from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
+from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_labels_for_article
 from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage
 from PDDiffusion.datasets.WikimediaCommons import LOCAL_STORAGE, BASE_API_ENDPOINT
 from PDDiffusion.datasets.model import Dataset, DatasetImage, File, DatasetLabel
@@ -45,18 +45,7 @@ with Session(engine) as session:
                 last_edited=dateutil.parser.isoparse(metadata_obj["timestamp"]),
                 wikidata=metadata_obj)
             session.add(wiki_image)
-
-            extracts = {}
-            if "terms" in metadata_obj:
-                for key in metadata_obj["terms"].keys():
-                    extracts[f"__{key}"] = ", ".join(metadata_obj["terms"][key])
-
-            for name in metadata_obj["parsetree"]:
-                xmlstr = metadata_obj["parsetree"][name]
-                extracts.update(extract_information_from_wikitext(xmlstr))
             
-            for key in extracts.keys():
-                wiki_data = DatasetLabel(image_id=ds_image.id, dataset_id=ds_image.dataset_id, data_key=key, value=extracts[key])
-                session.add(wiki_data)
+            extract_labels_for_article(wiki_image)
     
     session.commit()
