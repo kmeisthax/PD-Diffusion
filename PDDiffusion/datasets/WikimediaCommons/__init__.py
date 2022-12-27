@@ -1,8 +1,8 @@
-import requests, urllib.request, os.path, json, PIL
+import requests, urllib.request, os.path, PIL, dateutil.parser
 from PIL import Image
 from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
 from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage, BASE_API_ENDPOINT
-from PDDiffusion.datasets.model import Dataset, DatasetImage, DatasetLabel, File
+from PDDiffusion.datasets.model import DatasetImage, DatasetLabel, File
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -290,6 +290,7 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
         rv_timestamp = conn.revisions(titles=[true_item_name], rvprop=["timestamp"])
         if "revisions" in rv_timestamp["query"]["pages"][str(true_pageid)]:
             metadata["timestamp"] = rv_timestamp["query"]["pages"][str(true_pageid)]["revisions"][0]["timestamp"]
+            article.last_edited = dateutil.parser.isoparse(metadata["timestamp"])
 
             revisions = rv_timestamp["query"]["pages"][str(true_pageid)]["revisions"]
             if "continue" in rv_timestamp:
