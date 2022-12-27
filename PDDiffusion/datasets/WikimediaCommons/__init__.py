@@ -182,6 +182,8 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
     if localdata is None:
         if item is None:
             raise Exception("Must specify one of item or localdata when scraping")
+    
+    dataset_id = f"WikimediaCommons:{conn.base_api_endpoint}"
 
     true_item_name = None
     true_pageid = None
@@ -220,6 +222,19 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
             #Images can be banned either because they were too large to decode,
             #or because the file could not be decoded in PIL.
             return False
+    else:
+        localdata = session.execute(
+            select(WikimediaCommonsImage, DatasetImage)
+                .join_from(WikimediaCommonsImage, DatasetImage, WikimediaCommonsImage.base_image)
+                .where(WikimediaCommonsImage.id == true_item_name, WikimediaCommonsImage.dataset_id == dataset_id)
+        ).one_or_none()
+
+        if localdata is not None:
+            (article, image) = localdata
+
+            #File already exists
+            metadata_already_exists = True
+            file_already_exists = image.file is not None
     
     if rescrape:
         #Rescrapes ALWAYS trigger a metadata redownload.
@@ -237,12 +252,10 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
     if localdata is not None:
         (article, image) = localdata
     else:
-        dataset_id = f"WikimediaCommons:{conn.base_api_endpoint}"
-
         image = DatasetImage(dataset_id=dataset_id, id=true_item_name)
         article = WikimediaCommonsImage(dataset_id=dataset_id, id=true_item_name, post_id=true_pageid)
+        article.base_image = image
 
-        session.add(image)
         session.add(article)
     
     image_info = conn.image_info(titles=[true_item_name], iiprop=["url", "size"])["query"]["pages"][str(true_pageid)]["imageinfo"]
@@ -256,7 +269,7 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
             localfile = true_item_name.removeprefix("File:").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
             localfile = os.path.join(LOCAL_STORAGE, localfile)
 
-            with conn.urlopen(image["url"]) as source:
+            with conn.urlopen(image_data["url"]) as source:
                 with open(localfile, "wb") as sink:
                     sink.write(source.read())
             
@@ -264,7 +277,6 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
             session.add(image.file)
             
             if not image_is_valid(localfile):
-                os.rename(localfile, localfile + ".banned")
                 image.is_banned = True
     
     if not metadata_already_exists:
