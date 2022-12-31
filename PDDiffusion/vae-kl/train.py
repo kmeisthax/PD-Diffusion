@@ -19,6 +19,7 @@ class TrainingOptions:
     train_batch_size: int = field(default = 16, metadata={"args": ["--train_batch_size"], "help": "How many images to train per step. Will be reduced automatically if this exceeds the memory size of your GPU."})
     mixed_precision: str = field(default = 'no', metadata={"args": ["--mixed_precision"], "choices": ["no", "fp16", "bf16"], "help": "What mixed-precision mode to use, if any."})
     gradient_accumulation_steps: int = field(default=1, metadata={"args": ["--gradient_accumulation_steps"]})
+    enable_slicing: bool = field(default = False, metadata={"args": ["--enable_slicing"], "help": "Enable decode slicing"})
     learning_rate: float = field(default=1e-4, metadata={"args": ["--learning_rate"]})
     lr_warmup_steps: int = field(default=500, metadata={"args": ["--lr_warmup_steps"]})
 
@@ -94,6 +95,9 @@ def train(batch_size):
     else:
         model = AutoencoderKL(**config.as_vae_kwargs())
         progress = {"last_epoch": -1}
+    
+    if config.enable_slicing:
+        model.enable_slicing()
     
     optimizer = torch.optim.AdamW(
         model.parameters(),
