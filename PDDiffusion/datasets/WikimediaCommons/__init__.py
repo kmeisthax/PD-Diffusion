@@ -120,7 +120,7 @@ class Connection(object):
             for continue_key in last_query["continue"].keys():
                 continue_kwargs[continue_key] = last_query["continue"][continue_key]
             
-            last_query = self.query(titles, prop, **kwargs)
+            last_query = self.query(titles, prop, **continue_kwargs)
             data = dict_merge(data, last_query["query"])
         
         last_query["query"] = data
