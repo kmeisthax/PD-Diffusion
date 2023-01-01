@@ -66,6 +66,66 @@ class Connection(object):
             else:
                 return
     
+    def query(self, titles=[], prop=[], **kwargs):
+        """Query for any number of properties in a given set of pages.
+
+        Extra parameters for the query support list properties. Lists will be
+        merged using | characters, which is MediaWiki standard.
+        
+        At a minimum, you must provide a list of page titles and a list of
+        properties for those pages. The returned data will be structured as
+        follows:
+        
+        ```
+        {
+            "batchcomplete": "", /* If all data is present */
+            "continue": { /* If more requests are needed to get all data */
+                "continue": "", /* Value of the continue property that will
+                                 * get you the next bit of data */
+                "clcontinue": "", /* Ibid but for clcontinue */
+            }
+            "query": {
+                "pages": {
+                    "12345": { /* All page specific properties go here. */ }
+                    "67890": { /* Ibid. */ }
+                }
+            }
+        }
+        ```"""
+        parsed_kwargs = {}
+        for key in kwargs.keys():
+            if type(kwargs[key]) == list:
+                parsed_kwargs[key] = "|".join(kwargs[key])
+            else:
+                parsed_kwargs[key] = kwargs[key]
+        
+        return self.get(action="query", titles="|".join(titles), prop="|".join(prop), **parsed_kwargs)
+    
+    def query_all(self, titles=[], prop=[], **kwargs):
+        """Query for any number of properties and keep querying until the page
+        is out of data.
+        
+        We merge data from multiple queries as follows:
+        
+         * If a value is a string, the last seen value is recorded.
+         * If a value is a list, we append onto that list.
+         * If a value is a dict, we recursively apply the rules to its keys and
+         values."""
+        
+        last_query = self.query(titles, prop, **kwargs)
+        data = last_query["query"]
+
+        while "batchcomplete" not in last_query:
+            continue_kwargs = kwargs.copy()
+            for continue_key in last_query["continue"].keys():
+                continue_kwargs[continue_key] = last_query["continue"][continue_key]
+            
+            last_query = self.query(titles, prop, **kwargs)
+            data = dict_merge(data, last_query["query"])
+        
+        last_query["query"] = data
+        return last_query
+    
     def info(self, titles=[]):
         return self.get(action="query", prop="info", titles="|".join(titles))
 
@@ -92,6 +152,27 @@ class Connection(object):
         url.add_header("User-Agent", self.ua)
 
         return urllib.request.urlopen(url)
+
+def dict_merge(dict1, dict2):
+    """Merge dictionaries' keys in such a way that lists are merged rather than
+    being overwritten.
+    
+    This mutates the first dict, like dict.update."""
+
+    for key in dict2.keys():
+        if key not in dict1:
+            dict1[key] = dict2[key]
+        elif type(dict1[key]) == list and type(dict2[key]) == list:
+            dict1[key] = dict1[key] + dict2[key]
+        elif type(dict1[key]) == dict and type(dict2[key]) == dict:
+            dict1[key] = dict_merge(dict1[key], dict2[key])
+        else:
+            if type(dict1[key]) != type(dict2[key]):
+                raise Exception(f"Type of key {key} changed from {type(dict1[key])} to {type(dict2[key])} across requests")
+            
+            dict1[key] = dict2[key]
+    
+    return dict1
 
 #ALL Public Domain images.
 #Includes things that are only PD in some countries.
@@ -258,7 +339,17 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
 
         session.add(article)
     
-    image_info = conn.image_info(titles=[true_item_name], iiprop=["url", "size"])["query"]["pages"][str(true_pageid)]["imageinfo"]
+    query_data = conn.query_all(
+        titles=[true_item_name],
+        prop=["imageinfo", "revisions", "pageterms", "categories"],
+        iiprop=["url", "size"],
+        cllimit="max",
+        clshow="hidden",
+        rvprop=["timestamp", "user"],
+        rvlimit=100
+    )
+    
+    image_info = query_data["query"]["pages"][str(true_pageid)]["imageinfo"]
     for image_data in image_info:
         if image_data["size"] > Image.MAX_IMAGE_PIXELS:
             #Don't even download the file, just mark the metadata as banned
@@ -287,35 +378,18 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
         }
         metadata["title"] = true_item_name.removeprefix("File:").removesuffix(".jpg").removesuffix(".jpeg").removesuffix(".png").removesuffix(".tif").removesuffix(".tiff")
         
-        rv_timestamp = conn.revisions(titles=[true_item_name], rvprop=["timestamp"])
-        if "revisions" in rv_timestamp["query"]["pages"][str(true_pageid)]:
-            metadata["timestamp"] = rv_timestamp["query"]["pages"][str(true_pageid)]["revisions"][0]["timestamp"]
+        if "revisions" in query_data["query"]["pages"][str(true_pageid)]:
+            metadata["timestamp"] = query_data["query"]["pages"][str(true_pageid)]["revisions"][0]["timestamp"]
             article.last_edited = dateutil.parser.isoparse(metadata["timestamp"])
 
-            revisions = rv_timestamp["query"]["pages"][str(true_pageid)]["revisions"]
-            if "continue" in rv_timestamp:
-                rvcontinue = rv_timestamp["continue"]["rvcontinue"]
-
-                while rvcontinue is not None:
-                    rvcontinue_data = conn.revisions(titles=[true_item_name], rvcontinue=rvcontinue)
-                    if "revisions" in rvcontinue_data["query"]["pages"][str(true_pageid)]:
-                        for rev in rvcontinue_data["query"]["pages"][str(true_pageid)]["revisions"]:
-                            revisions.append(rev)
-                    
-                    if "continue" in rvcontinue_data:
-                        rvcontinue = rvcontinue_data["continue"]["rvcontinue"]
-                    else:
-                        rvcontinue = None
-            
+            revisions = query_data["query"]["pages"][str(true_pageid)]["revisions"]
             metadata["revisions"] = revisions
-
-        page_terms = conn.page_terms(titles=[true_item_name])
-        if "terms" in page_terms["query"]["pages"][str(true_pageid)]:
-            metadata["terms"] = page_terms["query"]["pages"][str(true_pageid)]["terms"]
         
-        page_cats = conn.categories(titles=[true_item_name])
-        if "categories" in page_cats["query"]["pages"][str(true_pageid)]:
-            metadata["categories"] = page_cats["query"]["pages"][str(true_pageid)]["categories"]
+        if "terms" in query_data["query"]["pages"][str(true_pageid)]:
+            metadata["terms"] = query_data["query"]["pages"][str(true_pageid)]["terms"]
+        
+        if "categories" in query_data["query"]["pages"][str(true_pageid)]:
+            metadata["categories"] = query_data["query"]["pages"][str(true_pageid)]["categories"]
         
         page_text = conn.parse_tree(true_item_name)
         if "parsetree" in page_text["parse"]:
