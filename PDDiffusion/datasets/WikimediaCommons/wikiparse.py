@@ -201,9 +201,11 @@ def parse_ymd(datestring):
                     try:
                         return (datetime.datetime.strptime(datestring, "%Y"), "%Y")
                     except ValueError:
-                        if "/" in datestring: #1735/36 style ambiguous dates
+                        if "/" in datestring or "-" in datestring or "−" in datestring: #1735/36 or 1747-8 style ambiguous dates
                             #TODO: We don't support date ranges, so just lop everything off
                             datestring = datestring.split("/")[0]
+                            datestring = datestring.split("-")[0]
+                            datestring = datestring.split("−")[0]
                         
                         if datestring.endswith("s"): #1700s style ambiguous dates
                             #TODO: This should be a date range, too
