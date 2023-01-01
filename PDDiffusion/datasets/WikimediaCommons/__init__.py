@@ -343,6 +343,7 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
         titles=[true_item_name],
         prop=["imageinfo", "revisions", "pageterms", "categories"],
         iiprop=["url", "size"],
+        iilimit=100,
         cllimit="max",
         clshow="hidden",
         rvprop=["timestamp", "user"],
@@ -350,25 +351,27 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
     )
     
     image_info = query_data["query"]["pages"][str(true_pageid)]["imageinfo"]
-    for image_data in image_info:
-        if image_data["size"] > Image.MAX_IMAGE_PIXELS:
-            #Don't even download the file, just mark the metadata as banned
+    #NOTE: We only grab the most recent image.
+    #Yes, we asked for more, that's mainly just to avoid unnecessary extra
+    #requests.
+    if image_info[0]["size"] > Image.MAX_IMAGE_PIXELS:
+        #Don't even download the file, just mark the metadata as banned
+        image.is_banned = True
+        file_already_exists = True
+    
+    if not file_already_exists:
+        localfile = true_item_name.removeprefix("File:").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
+        localfile = os.path.join(LOCAL_STORAGE, localfile)
+
+        with conn.urlopen(image_info[0]["url"]) as source:
+            with open(localfile, "wb") as sink:
+                sink.write(source.read())
+        
+        image.file = File(storage_provider=File.LOCAL_FILE, url=localfile)
+        session.add(image.file)
+        
+        if not image_is_valid(localfile):
             image.is_banned = True
-            break
-
-        if not file_already_exists:
-            localfile = true_item_name.removeprefix("File:").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
-            localfile = os.path.join(LOCAL_STORAGE, localfile)
-
-            with conn.urlopen(image_data["url"]) as source:
-                with open(localfile, "wb") as sink:
-                    sink.write(source.read())
-            
-            image.file = File(storage_provider=File.LOCAL_FILE, url=localfile)
-            session.add(image.file)
-            
-            if not image_is_valid(localfile):
-                image.is_banned = True
     
     if not metadata_already_exists:
         metadata = {}
