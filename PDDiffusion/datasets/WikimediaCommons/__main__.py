@@ -14,6 +14,7 @@ class WikimediaScrapeOptions:
     limit:int = field(metadata={"help": "How many new images to download"}, default=200)
     endpoint:str = field(metadata={"help": "Which Wiki mirror to scrape from, default is Wikimedia Commons"}, default=BASE_API_ENDPOINT)
     ua:str = field(metadata={"args": ["--user-agent"], "help": "Set the user-agent string for all requests"}, default=DEFAULT_UA)
+    update:bool = field(metadata={"args": ["--update"], "help": "Update outdated or damaged images"}, default=False)
     rescrape:bool = field(metadata={"args": ["--rescrape"], "help": "Redownload existing metadata"}, default=False)
 
 options = WikimediaScrapeOptions.parse_args(sys.argv[1:])
@@ -34,12 +35,12 @@ with Session(engine) as session:
     if session.execute(select(Dataset).where(Dataset.id == dataset_id)).one_or_none() is None:
         session.add(Dataset(id=dataset_id))
 
-    if options.rescrape:
+    if options.rescrape or options.update:
         for (article, image) in WikimediaCommonsImage.select_all_image_articles(session):
             if count >= options.limit:
                 break
 
-            if scrape_and_save_metadata(conn, session, localdata=(article, image), rescrape=True):
+            if scrape_and_save_metadata(conn, session, localdata=(article, image), rescrape=options.rescrape):
                 count += 1
             
             if count % 50 == 0:
