@@ -41,6 +41,9 @@ with Session(engine) as session:
 
             if scrape_and_save_metadata(conn, session, localdata=(article, image), rescrape=True):
                 count += 1
+            
+            if count % 50 == 0:
+                session.commit()
     else:
         for item in conn.walk_category(PD_ART_CATEGORY_OLD100, member_types=["file"]):
             if count >= options.limit:
@@ -48,5 +51,8 @@ with Session(engine) as session:
             
             if scrape_and_save_metadata(conn, session, item, rescrape=False):
                 count += 1
+            
+            if count % 50 == 0:
+                session.commit()
     
     session.commit()
