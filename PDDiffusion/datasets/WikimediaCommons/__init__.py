@@ -283,6 +283,13 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
 
         if image.file is not None:
             file_already_exists = True
+
+            if image.file.storage_provider != File.LOCAL_FILE:
+                print(f"Non-local file provider {image.file.storage_provider}")
+
+            if not os.path.exists(image.file.url):
+                file_already_exists = False
+                image.is_banned = False
         
         if article.wikidata is not None:
             metadata_already_exists = True
