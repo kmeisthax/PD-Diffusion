@@ -156,10 +156,17 @@ def parse_upper_and_lower_dates(lower_date, upper_date, warn=False):
         if len(lower_date_split) == 2:
             (maybe_lower_date, maybe_upper_date) = lower_date_split
 
-            if int(maybe_upper_date) >= 13:
+            try:
+                if int(maybe_upper_date) >= 13:
+                    if warn:
+                        print_warn(f"Splitting double-year date {lower_date_emless} to {maybe_lower_date} and {maybe_upper_date}")
+                    
+                    lower_date = maybe_lower_date
+                    upper_date = maybe_upper_date
+            except ValueError: #1760-x
                 if warn:
-                    print_warn(f"Splitting double-year date {lower_date_emless} to {maybe_lower_date} and {maybe_upper_date}")
-                
+                    print_warn(f"Double-year date {lower_date_emless} has invalid upper half")
+
                 lower_date = maybe_lower_date
                 upper_date = maybe_upper_date
     
