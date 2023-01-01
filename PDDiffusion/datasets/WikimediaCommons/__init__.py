@@ -363,9 +363,17 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
         localfile = true_item_name.removeprefix("File:").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
         localfile = os.path.join(LOCAL_STORAGE, localfile)
 
-        with conn.urlopen(image_info[0]["url"]) as source:
-            with open(localfile, "wb") as sink:
-                sink.write(source.read())
+        #NOTE: This is intended to deal with an old version of the code that
+        #didn't commit between each download, so if you Ctrl-C'd it you lost
+        #all the metadata. If we already have the file, just don't redownload
+        #it.
+        #
+        #When we support image revision redownloading we need to check if the
+        #image was updated and OVERRIDE this check.
+        if not os.path.join(localfile):
+            with conn.urlopen(image_info[0]["url"]) as source:
+                with open(localfile, "wb") as sink:
+                    sink.write(source.read())
         
         image.file = File(storage_provider=File.LOCAL_FILE, url=localfile)
         session.add(image.file)
