@@ -370,7 +370,7 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
         #
         #When we support image revision redownloading we need to check if the
         #image was updated and OVERRIDE this check.
-        if not os.path.join(localfile):
+        if not os.path.exists(localfile):
             with conn.urlopen(image_info[0]["url"]) as source:
                 with open(localfile, "wb") as sink:
                     sink.write(source.read())
