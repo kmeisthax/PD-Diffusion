@@ -301,6 +301,9 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
             
             if "timestamp" not in article.wikidata or "revisions" not in article.wikidata:
                 metadata_already_exists = False
+            
+            if "revisions" in article.wikidata and len(article.wikidata["revisions"]) > 0 and "user" not in article.wikidata["revisions"][0]:
+                metadata_already_exists = False
         
         if article.last_edited is None:
             metadata_already_exists = False
