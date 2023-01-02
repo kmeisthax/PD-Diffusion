@@ -1,12 +1,20 @@
 from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage
 from PDDiffusion.datasets.WikimediaCommons import Connection, DEFAULT_UA, BASE_API_ENDPOINT, PD_ART_CATEGORY_OLD100, LOCAL_STORAGE, scrape_and_save_metadata
 from PDDiffusion.datasets.model import Dataset
-import os.path, sys
+import os.path, sys, itertools
 from dataclasses import field
 from argparse_dataclass import dataclass
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
+
+def chunked_iterable(iterable, size):
+    it = iter(iterable)
+    while True:
+        chunk = tuple(itertools.islice(it, size))
+        if not chunk:
+            break
+        yield chunk
 
 @dataclass
 class WikimediaScrapeOptions:
@@ -36,24 +44,17 @@ with Session(engine) as session:
         session.add(Dataset(id=dataset_id))
 
     if options.rescrape or options.update:
-        for (article, image) in WikimediaCommonsImage.select_all_image_articles(session):
-            if count >= options.limit:
-                break
-
-            if scrape_and_save_metadata(conn, session, localdata=(article, image), rescrape=options.rescrape):
-                count += 1
-            
-            if count % 50 == 0:
-                session.commit()
+        source = WikimediaCommonsImage.select_all_image_articles(session)
     else:
-        for item in conn.walk_category(PD_ART_CATEGORY_OLD100, member_types=["file"]):
-            if count >= options.limit:
-                break
-            
-            if scrape_and_save_metadata(conn, session, item, rescrape=False):
-                count += 1
-            
-            if count % 50 == 0:
-                session.commit()
+        source = conn.walk_category(PD_ART_CATEGORY_OLD100, member_types=["file"])
+    
+    for pages in chunked_iterable(source, 10):
+        if count >= options.limit:
+            break
+
+        count += scrape_and_save_metadata(conn, session, pages=pages, force_rescrape=options.rescrape)
+        
+        if count % 50 == 0:
+            session.commit()
     
     session.commit()

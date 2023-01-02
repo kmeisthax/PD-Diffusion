@@ -240,50 +240,77 @@ def extract_labels_for_article(session, article):
     for key in extracts.keys():
         article.base_image.labels.append(DatasetLabel(image_id=article.id, dataset_id=article.dataset_id, data_key=key, value=extracts[key]))
 
-def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=False):
+def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
     """Scrape data from the Wikimedia connection and item to the local file path given.
 
     Conn is the current Mediawiki API connection and session is the current
     database connection.
+
+    Pages is a list of pages to query. Pages can be provided either as an item
+    dict (w/"title" and "pageid" keys) or a pair of database items
+    (article, image).
     
-    Item must be a dict with "title" and "pageid" keys matching the item to
-    download. Localdata must be a valid pair of database article and image
-    objects, if provided. If you are scraping from a Mediawiki server, the
-    `walk_category` method of `Connection` will provide item dicts for you.
-    
-    Returns True if the file scraped successfully and new data was obtained.
-    False indicates one of the following possible error conditions:
+    If you are scraping from a Mediawiki server, the `walk_category` method of
+    `Connection` will provide item dicts for you.
+
+    Returns the number of images that were successfully scraped. Data will not
+    be scraped in the following error conditions:
     
      - The file is already available locally and is up-to-date
-     - The file cannot be saved because it exceeds PIL's size requirements
-    
-    If you are enforcing a scrape limit, be sure not to count failures against
-    that limit."""
-
-    if localdata is None:
-        if item is None:
-            raise Exception("Must specify one of item or localdata when scraping")
+     - The file cannot be saved because it exceeds PIL's size requirements"""
     
     dataset_id = f"WikimediaCommons:{conn.base_api_endpoint}"
 
-    true_item_name = None
-    true_pageid = None
-    if item is not None:
-        true_item_name = item["title"]
-        true_pageid = item["pageid"]
-    else:
-        (article, _image) = localdata
-        true_item_name = article.id
-        true_pageid = article.post_id
-    
-    file_already_exists = False
-    metadata_already_exists = False
-    if localdata is not None:
-        (article, image) = localdata
+    items = {}               #List of pages we need to scrape
+    titles_to_query = []     #List of page titles to put into the metadata query
+    successful_items = set() #List of pages that we scraped successfully, for limit counting
 
+    for page in pages:
+        item = {}
+
+        #First, we need to determine if we've gotten a page title/id pair, or a
+        #database item.
+        if type(page) == dict: #pageid/title dict
+            localdata = session.execute(
+                select(WikimediaCommonsImage, DatasetImage)
+                    .join_from(WikimediaCommonsImage, DatasetImage, WikimediaCommonsImage.base_image)
+                    .where(WikimediaCommonsImage.id == page["title"], WikimediaCommonsImage.dataset_id == dataset_id)
+            ).one_or_none()
+
+            if localdata is not None:
+                (article, image) = localdata
+            else:
+                image = DatasetImage(dataset_id=dataset_id, id=page["title"])
+                article = WikimediaCommonsImage(dataset_id=dataset_id, id=page["title"], post_id=page["pageid"])
+                article.base_image = image
+
+                session.add(article)
+
+            item = {
+                "title": page["title"],
+                "pageid": page["pageid"],
+                "article": article,
+                "image": image
+            }
+        elif type(page) == tuple: #article/image orm object pair
+            (article, image) = page
+
+            item = {
+                "title": article.id,
+                "pageid": article.post_id,
+                "article": article,
+                "image": image
+            }
+        
+        #Next, we need to decide what to scrape.
+        file_already_exists = False
+        metadata_already_exists = False
+        
         if image.file is not None:
             file_already_exists = True
 
+            #Check if the image is actually stored or if we just have a bogus
+            #file entry.
             if image.file.storage_provider != File.LOCAL_FILE:
                 print(f"Non-local file provider {image.file.storage_provider}")
 
@@ -312,130 +339,132 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
             #Skip downloaded files that were banned from the training set.
             #Images can be banned either because they were too large to decode,
             #or because the file could not be decoded in PIL.
-            return False
-    else:
-        localdata = session.execute(
-            select(WikimediaCommonsImage, DatasetImage)
-                .join_from(WikimediaCommonsImage, DatasetImage, WikimediaCommonsImage.base_image)
-                .where(WikimediaCommonsImage.id == true_item_name, WikimediaCommonsImage.dataset_id == dataset_id)
-        ).one_or_none()
+            continue
 
-        if localdata is not None:
-            (article, image) = localdata
-
-            #File already exists
-            metadata_already_exists = True
-            file_already_exists = image.file is not None
-    
-    if rescrape:
-        #Rescrapes ALWAYS trigger a metadata redownload.
-        metadata_already_exists = False
-    
-    #TODO: Handle redirects.
-    #File:Gérard - Eugène de Beauharnais 1.jpg is an example redirect
-    
-    if file_already_exists and metadata_already_exists:
-        return False
-    
-    print(true_item_name)
-
-    #At this point, we need database objects to write to.
-    if localdata is not None:
-        (article, image) = localdata
-    else:
-        image = DatasetImage(dataset_id=dataset_id, id=true_item_name)
-        article = WikimediaCommonsImage(dataset_id=dataset_id, id=true_item_name, post_id=true_pageid)
-        article.base_image = image
-
-        session.add(article)
-    
-    query_data = conn.query_all(
-        titles=[true_item_name],
-        prop=["imageinfo", "revisions", "pageterms", "categories"],
-        iiprop=["url", "size"],
-        iilimit=100,
-        cllimit="max",
-        clshow="hidden",
-        rvprop=["timestamp", "user"],
-        rvlimit=100
-    )
-
-    for page_id in query_data["query"]["pages"].keys():
-        #Sometimes pages get renumbered, if so we need to handle that.
-        if page_id != true_pageid and query_data["query"]["pages"][page_id]["title"] == true_item_name:
-            true_pageid = page_id
-            article.post_id = page_id
-
-            if article.wikidata is not None:
-                if "item" not in article.wikidata:
-                    article.wikidata["item"] = {}
-                
-                article.wikidata["item"]["title"] = true_item_name
-                article.wikidata["item"]["pageid"] = page_id
-    
-    image_info = query_data["query"]["pages"][str(true_pageid)]["imageinfo"]
-    #NOTE: We only grab the most recent image.
-    #Yes, we asked for more, that's mainly just to avoid unnecessary extra
-    #requests.
-    if image_info[0]["size"] > Image.MAX_IMAGE_PIXELS:
-        #Don't even download the file, just mark the metadata as banned
-        image.is_banned = True
-        file_already_exists = True
-    
-    if not file_already_exists:
-        localfile = true_item_name.removeprefix("File:").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
-        localfile = os.path.join(LOCAL_STORAGE, localfile)
-
-        #NOTE: This is intended to deal with an old version of the code that
-        #didn't commit between each download, so if you Ctrl-C'd it you lost
-        #all the metadata. If we already have the file, just don't redownload
-        #it.
-        #
-        #When we support image revision redownloading we need to check if the
-        #image was updated and OVERRIDE this check.
-        if not os.path.exists(localfile):
-            with conn.urlopen(image_info[0]["url"]) as source:
-                with open(localfile, "wb") as sink:
-                    sink.write(source.read())
+        if force_rescrape:
+            metadata_already_exists = False
         
-        image.file = File(storage_provider=File.LOCAL_FILE, url=localfile)
-        session.add(image.file)
-        
-        if not image_is_valid(localfile):
-            image.is_banned = True
+        #TODO: Handle redirects.
+        #File:Gérard - Eugène de Beauharnais 1.jpg is an example redirect
     
-    if not metadata_already_exists:
-        metadata = {}
-        metadata["item"] = {
-            "title": true_item_name,
-            "pageid": true_pageid
-        }
-        metadata["title"] = true_item_name.removeprefix("File:").removesuffix(".jpg").removesuffix(".jpeg").removesuffix(".png").removesuffix(".tif").removesuffix(".tiff")
-        
-        if "revisions" in query_data["query"]["pages"][str(true_pageid)]:
-            metadata["timestamp"] = query_data["query"]["pages"][str(true_pageid)]["revisions"][0]["timestamp"]
-            article.last_edited = dateutil.parser.isoparse(metadata["timestamp"])
+        if file_already_exists and metadata_already_exists:
+            continue
 
-            revisions = query_data["query"]["pages"][str(true_pageid)]["revisions"]
-            metadata["revisions"] = revisions
+        print(item["title"])
         
-        if "terms" in query_data["query"]["pages"][str(true_pageid)]:
-            metadata["terms"] = query_data["query"]["pages"][str(true_pageid)]["terms"]
+        if not metadata_already_exists:
+            titles_to_query.append(item["title"])
         
-        if "categories" in query_data["query"]["pages"][str(true_pageid)]:
-            metadata["categories"] = query_data["query"]["pages"][str(true_pageid)]["categories"]
-        
-        page_text = conn.parse_tree(true_item_name)
-        if "parsetree" in page_text["parse"]:
-            metadata["parsetree"] = page_text["parse"]["parsetree"]
-        
-        metadata["imageinfo"] = image_info
-        
-        article.wikidata = metadata
-
-        extract_labels_for_article(session, article)
+        item["file_already_exists"] = file_already_exists
+        items[item["title"]] = item
     
-    return not image.is_banned
+    if len(titles_to_query) > 0:
+        #The actual query. This is done once with the list of things we want to
+        #query for fewer HTTP requests
+        query_data = conn.query_all(
+            titles=titles_to_query,
+            prop=["imageinfo", "revisions", "pageterms", "categories"],
+            iiprop=["url", "size"],
+            iilimit=100,
+            cllimit="max",
+            clshow="hidden",
+            rvprop=["timestamp", "user"]
+        )
+
+        titles_returned = []
+        
+        #All the pages we query now get copied back into their respective objects.
+        for page_id in query_data["query"]["pages"].keys():
+            corresponding_title = query_data["query"]["pages"][page_id]["title"]
+
+            if items[corresponding_title]["pageid"] != page_id:
+                #Sometimes pages get renumbered, so we need to handle that.
+                items[corresponding_title]["pageid"] = page_id
+                items[corresponding_title]["article"].post_id = page_id
+
+                if items[corresponding_title]["article"].wikidata is not None:
+                    if "item" not in items[corresponding_title]["article"].wikidata:
+                        items[corresponding_title]["article"].wikidata["item"] = {}
+                    else: #paranoia/sanity check
+                        if items[corresponding_title]["article"].wikidata["item"]["title"] != corresponding_title:
+                            raise Exception(f"Item {items[corresponding_title]['article'].wikidata['item']['title']} got renumbered but also renamed to {corresponding_title}")
+                    
+                    items[corresponding_title]["article"].wikidata["item"]["title"] = corresponding_title
+                    items[corresponding_title]["article"].wikidata["item"]["pageid"] = page_id
+            
+            metadata = {}
+            metadata["item"] = {
+                "title": corresponding_title,
+                "pageid": page_id
+            }
+
+            #Legacy title, probably should be removed.
+            metadata["title"] = corresponding_title.removeprefix("File:").removesuffix(".jpg").removesuffix(".jpeg").removesuffix(".png").removesuffix(".tif").removesuffix(".tiff")
+            
+            if "revisions" in query_data["query"]["pages"][page_id]:
+                metadata["timestamp"] = query_data["query"]["pages"][page_id]["revisions"][0]["timestamp"]
+                items[corresponding_title]["article"].last_edited = dateutil.parser.isoparse(metadata["timestamp"])
+
+                revisions = query_data["query"]["pages"][page_id]["revisions"]
+                metadata["revisions"] = revisions
+            
+            if "terms" in query_data["query"]["pages"][page_id]:
+                metadata["terms"] = query_data["query"]["pages"][page_id]["terms"]
+            
+            if "categories" in query_data["query"]["pages"][page_id]:
+                metadata["categories"] = query_data["query"]["pages"][page_id]["categories"]
+            
+            #TODO: What if MediaWiki just... doesn't give us metadata back?
+            page_text = conn.parse_tree(corresponding_title)
+            if "parsetree" in page_text["parse"]:
+                metadata["parsetree"] = page_text["parse"]["parsetree"]
+            
+            metadata["imageinfo"] = query_data["query"]["pages"][page_id]["imageinfo"]
+            
+            items[corresponding_title]["article"].wikidata = metadata
+
+            extract_labels_for_article(session, items[corresponding_title]["article"])
+
+            titles_returned.append(corresponding_title)
+            successful_items.add(corresponding_title)
+        
+        #More paranoia: we should always get the same amount of titles in and out
+        if len(titles_returned) != len(titles_to_query):
+            raise Exception(f"Query imbalance: asked for info on {len(titles_to_query)} pages but got {len(titles_returned)} back")
+    
+    #Now check if we have any images to scrape.
+    for corresponding_title in items.keys():
+        if not items[corresponding_title]["file_already_exists"]:
+            image_info = items[corresponding_title]["article"].wikidata["imageinfo"]
+            if image_info[0]["size"] > Image.MAX_IMAGE_PIXELS:
+                #Don't even download the file, just mark the metadata as banned
+                items[corresponding_title]["article"].is_banned = True
+                continue
+
+            localfile = corresponding_title.removeprefix("File:").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
+            localfile = os.path.join(LOCAL_STORAGE, localfile)
+
+            #NOTE: This is intended to deal with an old version of the code that
+            #didn't commit between each download, so if you Ctrl-C'd it you lost
+            #all the metadata. If we already have the file, just don't redownload
+            #it.
+            #
+            #When we support image revision redownloading we need to check if the
+            #image was updated and OVERRIDE this check.
+            if not os.path.exists(localfile):
+                with conn.urlopen(image_info[0]["url"]) as source:
+                    with open(localfile, "wb") as sink:
+                        sink.write(source.read())
+            
+            items[corresponding_title]["image"].file = File(storage_provider=File.LOCAL_FILE, url=localfile)
+            session.add(items[corresponding_title]["image"].file)
+            
+            if not image_is_valid(localfile):
+                items[corresponding_title]["image"].is_banned = True
+            
+            successful_items.add(corresponding_title)
+    
+    return len(successful_items)
 
 def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=True, intended_maximum_size=512):
     """Load in training data previously downloaded by running this module's main.
