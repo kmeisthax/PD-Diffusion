@@ -365,6 +365,7 @@ def scrape_and_save_metadata(conn, session, item=None, localdata=None, rescrape=
         if page_id != true_pageid and query_data["query"]["pages"][page_id]["title"] == true_item_name:
             true_pageid = page_id
             article.post_id = page_id
+            article.wikidata["item"]["pageid"] = page_id
     
     image_info = query_data["query"]["pages"][str(true_pageid)]["imageinfo"]
     #NOTE: We only grab the most recent image.
