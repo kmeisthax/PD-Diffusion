@@ -238,7 +238,10 @@ def extract_labels_for_article(session, article):
         extracts.update(extract_information_from_wikitext(xmlstr))
     
     for key in extracts.keys():
-        article.base_image.labels.append(DatasetLabel(image_id=article.id, dataset_id=article.dataset_id, data_key=key, value=extracts[key]))
+        label = DatasetLabel(image_id=article.id, dataset_id=article.dataset_id, data_key=key, value=extracts[key])
+        
+        article.base_image.labels.append(label)
+        session.add(label)
 
 def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
     """Scrape data from the Wikimedia connection and item to the local file path given.
