@@ -3,6 +3,7 @@
 import os, json, csv
 from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
 from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage
+from PDDiffusion.datasets.WikimediaCommons import extract_labels_for_article
 from PDDiffusion.datasets.model import File
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
@@ -15,10 +16,7 @@ engine = create_engine(os.getenv("DATABASE_CONNECTION"), future=True)
 
 with Session(engine) as session:
     for (article, image) in WikimediaCommonsImage.select_all_image_articles(session):
-        if image.file.storage_provider != File.LOCAL_FILE:
-            print(f"Non-local file provider {image.file.storage_provider}")
-
-        file = image.file.url
+        file = image.id
         metadata = article.wikidata
         
         #Get around the fact that input redirection appears to change text encoding.
@@ -30,6 +28,8 @@ with Session(engine) as session:
             xmlstr = metadata["parsetree"][name]
 
             try:
+                extract_labels_for_article(session, article)
+
                 extracted = extract_information_from_wikitext(xmlstr, warn=True, preferred_lang=None)
 
                 parses[name] = {
@@ -53,6 +53,8 @@ with Session(engine) as session:
             "status": "present",
             "parsetree": parses
         })
+    
+    session.commit()
 
 with open("extract_test_results.json", 'w') as json_file:
     json.dump(report, json_file, indent=4)
@@ -69,6 +71,9 @@ for item in report:
         if item["terms"] is not None:
             for key in item["terms"].keys():
                 item_data["__" + key] = ", ".join(item["terms"][key])
+        
+        if item["parsetree"]["*"]["status"] != "valid":
+            continue
 
         item_data.update(item["parsetree"]["*"]["en_only"])
 
