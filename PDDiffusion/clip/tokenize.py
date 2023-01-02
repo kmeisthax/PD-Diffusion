@@ -29,7 +29,13 @@ trainer = BpeTrainer(special_tokens=["[UNK]", "[PAD]", "[START]", "[END]"])
 
 tokenizer.pre_tokenizer = Whitespace()
 
-tokenizer.train_from_iterator(label_extractor(local_wikimedia_base(load_images=False)), trainer=trainer)
+#Preload the entire dataset because SQLite does not support the kind of
+#multithreaded nonsense that Tokenizers wants to do.
+label_set = []
+for item in label_extractor(local_wikimedia_base(load_images=False)):
+    label_set.append(item)
+
+tokenizer.train_from_iterator(label_set.__iter__(), trainer=trainer)
 
 if not os.path.exists("output"):
     os.makedirs("output")
