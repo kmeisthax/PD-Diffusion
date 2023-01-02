@@ -53,8 +53,4 @@ with Session(engine) as session:
             break
 
         count += scrape_and_save_metadata(conn, session, pages=pages, force_rescrape=options.rescrape)
-        
-        if count % 50 == 0:
-            session.commit()
-    
-    session.commit()
+        session.commit()
