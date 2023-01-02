@@ -523,6 +523,12 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
             extracted["__pagetitle"] = metadata_obj["item"]["title"]
             extracted["__pageid"] = str(metadata_obj["item"]["pageid"])
 
+            if image.file is None:
+                continue
+
+            if image.is_banned:
+                continue
+
             if image.file.storage_provider != File.LOCAL_FILE:
                 print(f"Non-local file provider {image.file.storage_provider}")
 
