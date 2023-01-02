@@ -872,10 +872,10 @@ def extract_information_from_wikitext(wikixml, warn=False, preferred_lang = "en"
     # called "Information".
     for tmpl in tree.iter("template"):
         if tmpl.find("title").text:
-            title = tmpl.find("title").text.strip()
+            title = tmpl.find("title").text.strip().lower()
             #Wikimedia Commons has separate info and artwork templates, but they
             #both are structured similarly enough to use.
-            if title != "Information" and title != "Artwork":
+            if title != "information" and title != "artwork":
                 continue
         else:
             continue
