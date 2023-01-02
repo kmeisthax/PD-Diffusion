@@ -148,6 +148,14 @@ def parse_upper_and_lower_dates(lower_date, upper_date, warn=False):
     #Someone also used YYYY\YYYY format
     lower_date_emless = lower_date.replace("–", "-").replace("—", "-").replace("\\", "-").replace("/", "-")
     if upper_date is None and '-' in lower_date_emless:
+        #There's at least one format that's "circa YYYY (YYYY-YYYY)". The real
+        #dates are in the parenthesis.
+        if "(" in lower_date_emless and ")" in lower_date_emless:
+            open_paren = lower_date_emless.index("(")
+            close_paren = lower_date_emless.rindex(")")
+
+            lower_date_emless = lower_date_emless[open_paren + 1:close_paren]
+
         #TODO: This introduces upper dates to formats that don't expect them.
         #They will be dropped for now
         lower_date_split = lower_date_emless.split("-")
