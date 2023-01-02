@@ -496,7 +496,7 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
 
         count = 0
 
-        for (article, image) in session.execute(WikimediaCommonsImage.select_all_image_articles(session)):
+        for (article, image) in WikimediaCommonsImage.select_all_image_articles(session):
             if limit is not None and count > limit:
                 break
             
