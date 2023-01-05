@@ -17,6 +17,7 @@ from PIL import Image
 @dataclass
 class TrainingOptions:
     image_size: int = field(default = 128, metadata={"args": ["--image_size"], "help": "The image resolution to train the model at."})
+    clip_batch_size: int = field(default = 16, metadata={"args": ["--clip_batch_size"], "help": "How many images to calculate CLIP vectors for."})
     train_batch_size: int = field(default = 16, metadata={"args": ["--train_batch_size"], "help": "How many images to train per step. Will be reduced automatically if this exceeds the memory size of your GPU."})
     eval_batch_size: int = field(default = 16, metadata={"args": ["--eval_batch_size"], "help": "How many output image samples to generate on a save-image epoch"})
     num_epochs: int = field(default = 50, metadata={"args": ["--num_epochs"], "help": "How many epochs to train for. You can only generate sample images or checkpoint the model at an epoch boundary."})
@@ -199,7 +200,7 @@ def load_dataset_with_condition(config, accelerator):
 
             cond_model = accelerator.prepare(cond_model)
 
-            clip_batch_size = config.train_batch_size * 16
+            clip_batch_size = config.clip_batch_size
 
             @find_executable_batch_size(starting_batch_size=clip_batch_size)
             def inner_batch(batch_size):
