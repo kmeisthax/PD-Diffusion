@@ -118,7 +118,7 @@ class DDPMConditionalPipeline(DiffusionPipeline):
             "Please make sure to instantiate your scheduler with `prediction_type` instead. E.g. `scheduler ="
             " DDPMScheduler.from_pretrained(<model_id>, prediction_type='epsilon')`."
         )
-        predict_epsilon = deprecate("predict_epsilon", "0.10.0", message, take_from=kwargs)
+        predict_epsilon = deprecate("predict_epsilon", "0.12.0", message, take_from=kwargs)
 
         if predict_epsilon is not None:
             new_config = dict(self.scheduler.config)
