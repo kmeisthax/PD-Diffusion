@@ -159,15 +159,15 @@ def train_loop(config):
                 with torch.no_grad():
                     pipeline = create_model_pipeline(config, accelerator, model, noise_scheduler)
 
-                    if config.save_image_epochs <= config.num_epochs and ((epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1):
-                        evaluate(config, epoch, pipeline)
-
                     if config.save_model_epochs <= config.num_epochs and ((epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1):
                         pipeline.save_pretrained(os.path.join("output", config.output_dir))
 
                         with open(os.path.join("output", config.output_dir, "progress.json"), "w") as progress_file:
                             progress["last_epoch"] = epoch
                             json.dump(progress, progress_file)
+
+                    if config.save_image_epochs <= config.num_epochs and ((epoch + 1) % config.save_image_epochs == 0 or epoch == config.num_epochs - 1):
+                        evaluate(config, epoch, pipeline)
     
     inner_training_loop()
 
