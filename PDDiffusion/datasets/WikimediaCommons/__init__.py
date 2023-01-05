@@ -544,23 +544,34 @@ def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=Tru
                 if os.path.exists(resized_file) and image_is_valid(resized_file):
                     file = resized_file
                 else:
+                    print(file)
+
                     if not image_is_valid(file):
+                        image.is_banned = True
+                        session.commit()
+
                         #Rename the file and its metadata for later inspection
-                        os.rename(file, file + '.banned')
-                        os.rename(file + '.json', file + '.bannedmetadata')
+                        try:
+                            os.rename(file, file + '.banned')
+                        except OSError:
+                            pass
 
                         continue
-                    
-                    #Otherwise check if this image is too large and if so, downscale.
-                    image = Image.open(file)
-                    if image.width > intended_maximum_size or image.height > intended_maximum_size:
-                        image.thumbnail((intended_maximum_size, intended_maximum_size))
-                        image.save(resized_file)
-                        image.close()
 
-                        file = resized_file
-                    else:
-                        image.close()
+                    #Otherwise check if this image is too large and if so, downscale.
+                    try:
+                        image = Image.open(file)
+                        if image.width > intended_maximum_size or image.height > intended_maximum_size:
+                            image.thumbnail((intended_maximum_size, intended_maximum_size))
+                            image.save(resized_file)
+                            image.close()
+
+                            file = resized_file
+                        else:
+                            image.close()
+                    except:
+                        image.is_banned = True
+                        session.commit()
                 
                 image = Image.open(os.path.abspath(file))
                 image.close()
