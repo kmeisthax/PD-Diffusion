@@ -46,7 +46,6 @@ class TrainingOptions:
     mixed_precision: str = field(default = 'no', metadata={"args": ["--mixed_precision"], "choices": ["no", "fp16", "bf16"], "help": "What mixed-precision mode to use, if any."})
     output_dir: str = field(default='pd-diffusion', metadata={"args": ["output_dir"], "help": "The directory name to save the model to. Will also be used as the name of the model for Huggingface upload, if selected."})
 
-    push_to_hub: bool = field(default=False, metadata={"args": ["--push_to_hub"], "help": "Automatically upload trained model weights to Huggingface's model hub"})
     seed: int = field(default=0, metadata={"args": ["--seed"], "help": "The seed to use when generating sample images."})
 
     ddpm_train_timesteps: int = field(default=1000, metadata={"args": ["--ddpm_train_timesteps"]})

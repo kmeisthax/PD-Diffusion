@@ -5,7 +5,6 @@ import os.path, torch, json, sys, math
 from accelerate import Accelerator, find_executable_batch_size
 from diffusers import DDPMScheduler, DDPMPipeline
 from diffusers.optimization import get_cosine_schedule_with_warmup
-from diffusers.hub_utils import init_git_repo, push_to_hub
 from tqdm.auto import tqdm
 import torch.nn.functional as F
 from PIL import ImageFile
@@ -27,8 +26,6 @@ def train_loop(config):
         logging_dir=os.path.join("output", config.output_dir, "logs")
     )
     if accelerator.is_main_process:
-        if config.push_to_hub:
-            repo = init_git_repo(config, at_init=True)
         accelerator.init_trackers("train_example")
     
     (dataset, cond_model_config) = load_dataset_with_condition(config, accelerator)
@@ -166,14 +163,11 @@ def train_loop(config):
                         evaluate(config, epoch, pipeline)
 
                     if config.save_model_epochs <= config.num_epochs and ((epoch + 1) % config.save_model_epochs == 0 or epoch == config.num_epochs - 1):
-                        if config.push_to_hub:
-                            push_to_hub(config, pipeline, repo, commit_message=f"Epoch {epoch}", blocking=True)
-                        else:
-                            pipeline.save_pretrained(os.path.join("output", config.output_dir))
+                        pipeline.save_pretrained(os.path.join("output", config.output_dir))
 
-                            with open(os.path.join("output", config.output_dir, "progress.json"), "w") as progress_file:
-                                progress["last_epoch"] = epoch
-                                json.dump(progress, progress_file)
+                        with open(os.path.join("output", config.output_dir, "progress.json"), "w") as progress_file:
+                            progress["last_epoch"] = epoch
+                            json.dump(progress, progress_file)
     
     inner_training_loop()
 
