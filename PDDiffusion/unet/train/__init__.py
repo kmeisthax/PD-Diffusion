@@ -311,9 +311,10 @@ def evaluate(config, epoch, pipeline):
         pipeline_params["prompt"] = config.evaluation_prompt
 
     images = pipeline(**pipeline_params).images
+    square_size = math.ceil(math.sqrt(config.eval_batch_size))
 
     # Make a grid out of the images
-    image_grid = make_grid(images, rows=4, cols=4)
+    image_grid = make_grid(images, rows=square_size, cols=square_size)
 
     # Save the images
     test_dir = os.path.join("output", config.output_dir, "samples")
