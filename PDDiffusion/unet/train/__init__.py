@@ -305,7 +305,7 @@ def evaluate(config, epoch, pipeline):
     also conditional and provide it with a prompt."""
     pipeline_params = {
         "batch_size": config.eval_batch_size,
-        "generator": torch.manual_seed(config.seed)
+        "generator": torch.Generator(device=pipeline.unet.device).manual_seed(config.seed)
     }
     if config.conditioned_on is not None:
         pipeline_params["prompt"] = config.evaluation_prompt
