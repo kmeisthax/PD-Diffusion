@@ -1,4 +1,4 @@
-import requests, urllib.request, os.path, PIL, dateutil.parser
+import requests, urllib.request, os.path, PIL, dateutil.parser, time
 from PIL import Image
 from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
 from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage, BASE_API_ENDPOINT
@@ -243,6 +243,26 @@ def extract_labels_for_article(session, article):
         article.base_image.labels.append(label)
         session.add(label)
 
+def transient_error_tolerance(fn):
+    def ret(conn, session, *args, **kwargs):
+        tries = 0
+
+        while True:
+            try:
+                return fn(conn, session, *args, **kwargs)
+            except urllib.request.HTTPError as e:
+                if e.code == 502 and tries < 5:
+                    session.rollback()
+                    
+                    tries += 1
+                    time.sleep(tries)
+                    print(f"Retrying prior scrape ({tries} tries)")
+                else:
+                    raise e
+    
+    return ret
+
+@transient_error_tolerance
 def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
     """Scrape data from the Wikimedia connection and item to the local file path given.
 
