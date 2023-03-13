@@ -194,6 +194,9 @@ def parse_ymd(datestring):
     fields as otherdate would print them in English.
     
     TODO: BC/AD"""
+
+    datestring = datestring.replace("ca", "").strip()
+
     try:
         return (datetime.datetime.strptime(datestring, "%Y-%m-%d"), "%d %B %Y")
     except ValueError:
