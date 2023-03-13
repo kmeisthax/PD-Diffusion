@@ -209,13 +209,16 @@ def parse_ymd(datestring):
                     try:
                         return (datetime.datetime.strptime(datestring, "%Y"), "%Y")
                     except ValueError:
-                        if "/" in datestring or "-" in datestring or "−" in datestring: #1735/36 or 1747-8 style ambiguous dates
+                        #1735/36 or 1747-8 style ambiguous dates.
+                        #Yes, there are THAT MANY DIFFERENT DASHES IN UNICODE,
+                        #THEY ARE ACTUALLY DIFFERENT
+                        if "/" in datestring or "-" in datestring or "−" in datestring or "–" in datestring:
                             #TODO: We don't support date ranges, so just lop everything off.
-                            datestring = datestring.replace("/", "-").replace("−", "-")
+                            datestring = datestring.replace("/", "-").replace("−", "-").replace("–", "-")
                             
                             #We also have to account for some "negative dates" which are actually BC dates.
                             #Of course, Python datetime can't HANDLE dates that far back...
-                            if datestring.split("-")[0].trim() == "":
+                            if datestring.split("-")[0].strip() == "":
                                 datestring = datestring.split("-")[1]
                             else:
                                 datestring = datestring.split("-")[0]
