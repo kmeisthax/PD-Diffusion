@@ -235,7 +235,10 @@ def extract_labels_for_article(session, article):
 
     for name in article.wikidata["parsetree"]:
         xmlstr = article.wikidata["parsetree"][name]
-        extracts.update(extract_information_from_wikitext(xmlstr))
+        try:
+            extracts.update(extract_information_from_wikitext(xmlstr))
+        except Exception as e:
+            print(f"Got error when extracting information from wikitext: {e}")
     
     for key in extracts.keys():
         label = DatasetLabel(image_id=article.id, dataset_id=article.dataset_id, data_key=key, value=extracts[key])
