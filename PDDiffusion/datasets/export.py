@@ -51,7 +51,7 @@ class AsyncShardCloseThread(threading.Thread):
     
     Closing involves making sure all resize threads have completed and data has
     been written to disk."""
-    def __init__(self, encountered_items, shard):
+    def __init__(self, encountered_items, shard, verbose):
         """Create the async close thread.
         
         The list of encountered items should be a list of 3-tuples, each one
@@ -61,23 +61,32 @@ class AsyncShardCloseThread(threading.Thread):
          - The resize thread that saved the image already
          - The result object that the thread saves data to
         
-        shard should be an open JSON file which we will write data to."""
+        shard should be an open JSON file which we will write data to.
+        
+        verbose is whether or not we want database stuff to be printed."""
         super(AsyncShardCloseThread, self).__init__()
 
         self.encountered_items = encountered_items
         self.shard = shard
+        self.verbose = verbose
     
     def run(self):
-        for (item, resize_thread, resize_result) in self.encountered_items:
-            resize_thread.join()
+        engine = create_engine(os.getenv("DATABASE_CONNECTION"), echo=self.verbose, future=True)
 
-            if "success" in resize_result:
-                json.dump(item, self.shard)
-                self.shard.write("\n")
-            else:
-                print(f"Image {item['id']} could not be resized, got error {resize_result['failure']}")
+        with Session(engine) as session:
+            for (item, resize_thread, resize_result) in self.encountered_items:
+                resize_thread.join()
 
-        self.shard.close()
+                if "success" in resize_result:
+                    for label in session.execute(select(DatasetLabel).where(DatasetLabel.image_id == item["id"])).scalars().all():
+                        item[label.data_key] = label.value
+
+                    json.dump(item, self.shard)
+                    self.shard.write("\n")
+                else:
+                    print(f"Image {item['id']} could not be resized, got error {resize_result['failure']}")
+
+            self.shard.close()
 
 options = ExportOptions.parse_args(sys.argv[1:])
 load_dotenv()
@@ -105,7 +114,7 @@ with Session(engine) as session:
         global encountered_items
 
         if shard is not None:
-            AsyncShardCloseThread(encountered_items, shard).start()
+            AsyncShardCloseThread(encountered_items, shard, options.verbose).start()
             encountered_items = []
     
     for image in session.execute(select(DatasetImage).where(DatasetImage.is_banned == False)).scalars().all():
@@ -135,9 +144,6 @@ with Session(engine) as session:
         for key in keys:
             if key not in extracted:
                 extracted[key] = ""
-        
-        for label in session.execute(select(DatasetLabel).where(DatasetLabel.image_id == image.id)).scalars().all():
-            extracted[label.data_key] = label.value
         
         if not image_is_valid(image.file.url):
             print(f"Image {image.id} is corrupt, skipping")
