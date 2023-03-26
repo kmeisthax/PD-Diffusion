@@ -36,6 +36,10 @@ class AsyncResizeThread(threading.Thread):
     
     def run(self):
         try:
+            if not image_is_valid(self.open_location):
+                self.result_object["failure"] = f"Image {image.id} is corrupt, skipping"
+                return
+            
             image = Image.open(self.open_location)
             if image.width > self.size or image.height > self.size:
                 image.thumbnail((self.size, self.size))
@@ -144,10 +148,6 @@ with Session(engine) as session:
         for key in keys:
             if key not in extracted:
                 extracted[key] = ""
-        
-        if not image_is_valid(image.file.url):
-            print(f"Image {image.id} is corrupt, skipping")
-            continue
 
         localfile = image.id.replace(":", "").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
         target_filename = os.path.join("output", options.target_dataset_name, f"test_{shard_id}", localfile)
