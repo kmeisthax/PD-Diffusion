@@ -69,6 +69,8 @@ with Session(engine) as session:
     encountered_items = []
 
     def close_last_shard():
+        global encountered_items
+
         if shard is not None:
             for (item, resize_thread, resize_result) in encountered_items:
                 resize_thread.join()
@@ -80,6 +82,7 @@ with Session(engine) as session:
                     print(f"Image {item.id} could not be resized, got error {resize_result['failure']}")
 
             shard.close()
+            encountered_items = []
     
     for image in session.execute(select(DatasetImage).where(DatasetImage.is_banned == False)).scalars().all():
         if items_in_shard > options.rows_per_shard:
