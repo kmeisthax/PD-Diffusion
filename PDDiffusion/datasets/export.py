@@ -39,7 +39,7 @@ class AsyncResizeThread(threading.Thread):
             if not image_is_valid(self.open_location):
                 self.result_object["failure"] = f"Image {image.id} is corrupt, skipping"
                 return
-            
+
             image = Image.open(self.open_location)
             if image.width > self.size or image.height > self.size:
                 image.thumbnail((self.size, self.size))
@@ -55,7 +55,7 @@ class AsyncShardCloseThread(threading.Thread):
     
     Closing involves making sure all resize threads have completed and data has
     been written to disk."""
-    def __init__(self, encountered_items, shard, verbose):
+    def __init__(self, encountered_items, shard, verbose, id):
         """Create the async close thread.
         
         The list of encountered items should be a list of 3-tuples, each one
@@ -66,8 +66,8 @@ class AsyncShardCloseThread(threading.Thread):
          - The result object that the thread saves data to
         
         shard should be an open JSON file which we will write data to.
-        
-        verbose is whether or not we want database stuff to be printed."""
+        verbose is whether or not we want database stuff to be printed.
+        id is our shard number."""
         super(AsyncShardCloseThread, self).__init__()
 
         self.encountered_items = encountered_items
@@ -91,6 +91,8 @@ class AsyncShardCloseThread(threading.Thread):
                     print(f"Image {item['id']} could not be resized, got error {resize_result['failure']}")
 
             self.shard.close()
+        
+        print(f"Closed out shard {self.id}")
 
 options = ExportOptions.parse_args(sys.argv[1:])
 load_dotenv()
@@ -113,22 +115,26 @@ with Session(engine) as session:
     shard = None
 
     encountered_items = []
+    open_shards = []
 
     def close_last_shard():
         global encountered_items
 
         if shard is not None:
-            AsyncShardCloseThread(encountered_items, shard, options.verbose).start()
+            shard_thread = AsyncShardCloseThread(encountered_items, shard, options.verbose, shard_id)
+            open_shards.append(shard_thread)
+            shard_thread.start()
+
             encountered_items = []
     
     for image in session.execute(select(DatasetImage).where(DatasetImage.is_banned == False)).scalars().all():
         if items_in_shard > options.rows_per_shard:
+            close_last_shard()
+
             shard_id += 1
             items_in_shard = 0
         
-        if items_in_shard == 0:
-            close_last_shard()
-            
+        if shard is None:
             shard = open(os.path.join("output", options.target_dataset_name, f"test_{shard_id}.json"), 'w', encoding='utf-8')
             if not os.path.exists(os.path.join("output", options.target_dataset_name, f"test_{shard_id}")):
                 os.makedirs(os.path.join("output", options.target_dataset_name, f"test_{shard_id}"))
@@ -164,5 +170,8 @@ with Session(engine) as session:
         items_in_shard += 1
     
     close_last_shard()
+
+    for thread in open_shards:
+        thread.join()
     
     print(f"Exported {shard_id * options.rows_per_shard + items_in_shard} items")
