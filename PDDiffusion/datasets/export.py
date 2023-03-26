@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from PIL import Image
-import sys, os.path, json
+import sys, os.path, json, threading
 
 @dataclass
 class ExportOptions:
@@ -17,6 +17,34 @@ class ExportOptions:
     verbose: bool = field(default=False, metadata={"args": ["--verbose"], "help": "Log SQL statements as they execute"})
     rows_per_shard: int = field(default=1000, metadata={"args": ["--rows_per_shard"], "help": "How many images per CSV file"})
     maximum_image_size: int = field(default=512, metadata={"args": ["--maximum_image_size"], "help": "How large the images in the dataset should be"})
+
+class AsyncResizeThread(threading.Thread):
+    """Thread that opens an image, resizes it if it's too big, and saves it
+    somewhere else.
+    
+    Results are reported in the given result_object. No locking is performed on
+    the object; you must join this thread before accessing the results.
+    
+    This expects PIL to not hold the CPython GIL during the resize."""
+    def __init__(self, open_location, size, save_location, result_object):
+        super(AsyncResizeThread, self).__init__()
+
+        self.open_location = open_location
+        self.size = size
+        self.save_location = save_location
+        self.result_object = result_object
+    
+    def run(self):
+        try:
+            image = Image.open(self.open_location)
+            if image.width > self.size or image.height > self.size:
+                image.thumbnail((self.size, self.size))
+            
+            image.save(self.save_location)
+            image.close()
+            self.result_object["success"] = True
+        except Exception as e:
+            self.result_object["failure"] = e
 
 options = ExportOptions.parse_args(sys.argv[1:])
 load_dotenv()
@@ -37,6 +65,21 @@ with Session(engine) as session:
     items_in_shard = 0
 
     shard = None
+
+    encountered_items = []
+
+    def close_last_shard():
+        if shard is not None:
+            for (item, resize_thread, resize_result) in encountered_items:
+                resize_thread.join()
+
+                if "success" in resize_result:
+                    json.dump(item, shard)
+                    shard.write("\n")
+                else:
+                    print(f"Image {item.id} could not be resized, got error {resize_result['failure']}")
+
+            shard.close()
     
     for image in session.execute(select(DatasetImage).where(DatasetImage.is_banned == False)).scalars().all():
         if items_in_shard > options.rows_per_shard:
@@ -44,8 +87,7 @@ with Session(engine) as session:
             items_in_shard = 0
         
         if items_in_shard == 0:
-            if shard is not None:
-                shard.close()
+            close_last_shard()
             
             shard = open(os.path.join("output", options.target_dataset_name, f"test_{shard_id}.json"), 'w', encoding='utf-8')
             if not os.path.exists(os.path.join("output", options.target_dataset_name, f"test_{shard_id}")):
@@ -77,22 +119,17 @@ with Session(engine) as session:
         localfile = image.id.replace(":", "").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
         target_filename = os.path.join("output", options.target_dataset_name, f"test_{shard_id}", localfile)
         target_filename_relative_to_dataset = os.path.join(f"test_{shard_id}", localfile)
-        try:
-            pil_image = Image.open(image.file.url)
-            if pil_image.width > options.maximum_image_size or pil_image.height > options.maximum_image_size:
-                pil_image.thumbnail((options.maximum_image_size, options.maximum_image_size))
-            
-            pil_image.save(target_filename)
-            pil_image.close()
-        except Exception as e:
-            print(f"Image {image.id} failed to resize, got error {e}")
         
         extracted["image"] = target_filename_relative_to_dataset
 
-        json.dump(extracted, shard)
+        result = {}
+        thread = AsyncResizeThread(image.file.url, options.maximum_image_size, target_filename, result)
+        encountered_items.append((extracted, thread, result))
+
+        thread.start()
+
         items_in_shard += 1
     
-    if shard is not None:
-        shard.close()
+    close_last_shard()
     
     print(f"Exported {shard_id * options.rows_per_shard + items_in_shard} items")
