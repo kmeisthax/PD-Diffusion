@@ -3,6 +3,7 @@ from PIL import Image
 from PDDiffusion.datasets.WikimediaCommons.wikiparse import extract_information_from_wikitext
 from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage, BASE_API_ENDPOINT
 from PDDiffusion.datasets.model import DatasetImage, DatasetLabel, File
+from PDDiffusion.datasets.validity import image_is_valid
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
@@ -197,28 +198,6 @@ PD_ART_CATEGORY_OLD100 = "Category:PD-Art (PD-old-100)"
 #Almost certainly the most safe category, and likely to be a high quality
 #training source as it is art.
 PD_ART_US_EXPIRATION_CATEGORY = "Category:PD-Art (PD-US-expired)"
-
-def image_is_valid(file):
-    """Test if an image file on disk loads with PIL."""
-
-    try:
-        test_image = Image.open(os.path.abspath(file))
-        try:
-            test_image.load()
-            test_image.close()
-
-            return True
-        except PIL.UnidentifiedImageError:
-            print ("Warning: Image {} is an unknown format".format(file))
-            test_image.close()
-
-            return False
-    except PIL.Image.DecompressionBombError:
-        print ("Warning: Image {} is too large for PIL".format(file))
-        return False
-    except OSError as e:
-        print ("Warning: Image {} could not be read from disk, error was: {}".format(file, e))
-        return False
 
 def extract_labels_for_article(session, article):
     """Extract labels from a Wikimedia Commons article and store them in its associated image."""
