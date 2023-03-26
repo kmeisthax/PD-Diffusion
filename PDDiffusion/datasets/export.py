@@ -46,6 +46,39 @@ class AsyncResizeThread(threading.Thread):
         except Exception as e:
             self.result_object["failure"] = e
 
+class AsyncShardCloseThread(threading.Thread):
+    """Thread that closes out a given shard.
+    
+    Closing involves making sure all resize threads have completed and data has
+    been written to disk."""
+    def __init__(self, encountered_items, shard):
+        """Create the async close thread.
+        
+        The list of encountered items should be a list of 3-tuples, each one
+        containing the following items:
+        
+         - The data item to save
+         - The resize thread that saved the image already
+         - The result object that the thread saves data to
+        
+        shard should be an open JSON file which we will write data to."""
+        super(AsyncShardCloseThread, self).__init__()
+
+        self.encountered_items = encountered_items
+        self.shard = shard
+    
+    def run(self):
+        for (item, resize_thread, resize_result) in self.encountered_items:
+            resize_thread.join()
+
+            if "success" in resize_result:
+                json.dump(item, self.shard)
+                self.shard.write("\n")
+            else:
+                print(f"Image {item['id']} could not be resized, got error {resize_result['failure']}")
+
+        self.shard.close()
+
 options = ExportOptions.parse_args(sys.argv[1:])
 load_dotenv()
 engine = create_engine(os.getenv("DATABASE_CONNECTION"), echo=options.verbose, future=True)
@@ -72,16 +105,7 @@ with Session(engine) as session:
         global encountered_items
 
         if shard is not None:
-            for (item, resize_thread, resize_result) in encountered_items:
-                resize_thread.join()
-
-                if "success" in resize_result:
-                    json.dump(item, shard)
-                    shard.write("\n")
-                else:
-                    print(f"Image {item.id} could not be resized, got error {resize_result['failure']}")
-
-            shard.close()
+            AsyncShardCloseThread(encountered_items, shard).start()
             encountered_items = []
     
     for image in session.execute(select(DatasetImage).where(DatasetImage.is_banned == False)).scalars().all():
