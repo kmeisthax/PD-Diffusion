@@ -135,9 +135,10 @@ with Session(engine) as session:
             items_in_shard = 0
         
         if shard is None:
-            shard = open(os.path.join("output", options.target_dataset_name, f"test_{shard_id}.json"), 'w', encoding='utf-8')
-            if not os.path.exists(os.path.join("output", options.target_dataset_name, f"test_{shard_id}")):
-                os.makedirs(os.path.join("output", options.target_dataset_name, f"test_{shard_id}"))
+            shard = open(os.path.join("output", options.target_dataset_name, f"train_{shard_id}.json"), 'w', encoding='utf-8')
+        
+        if not os.path.exists(os.path.join("output", options.target_dataset_name, f"train_{shard_id}")):
+            os.makedirs(os.path.join("output", options.target_dataset_name, f"train_{shard_id}"))
         
         if image.file is None or image.is_banned:
             continue
@@ -156,8 +157,8 @@ with Session(engine) as session:
                 extracted[key] = ""
 
         localfile = image.id.replace(":", "").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
-        target_filename = os.path.join("output", options.target_dataset_name, f"test_{shard_id}", localfile)
-        target_filename_relative_to_dataset = os.path.join(f"test_{shard_id}", localfile)
+        target_filename = os.path.join("output", options.target_dataset_name, f"train_{shard_id}", localfile)
+        target_filename_relative_to_dataset = os.path.join(f"train_{shard_id}", localfile)
         
         extracted["image"] = target_filename_relative_to_dataset
 
