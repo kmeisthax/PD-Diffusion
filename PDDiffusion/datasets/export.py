@@ -55,7 +55,7 @@ class AsyncShardCloseThread(threading.Thread):
     
     Closing involves making sure all resize threads have completed and data has
     been written to disk."""
-    def __init__(self, encountered_items, shard, verbose, id):
+    def __init__(self, encountered_items, shard_save_location, verbose, id):
         """Create the async close thread.
         
         The list of encountered items should be a list of 3-tuples, each one
@@ -65,14 +65,15 @@ class AsyncShardCloseThread(threading.Thread):
          - The resize thread that saved the image already
          - The result object that the thread saves data to
         
-        shard should be an open JSON file which we will write data to.
+        shard_save_location should be a valid path to save the shard to.
         verbose is whether or not we want database stuff to be printed.
         id is our shard number."""
         super(AsyncShardCloseThread, self).__init__()
 
         self.encountered_items = encountered_items
-        self.shard = shard
+        self.shard = open(os.path.join(shard_save_location, f"train_{id}.json"), 'w', encoding='utf-8')
         self.verbose = verbose
+        self.id = id
     
     def run(self):
         engine = create_engine(os.getenv("DATABASE_CONNECTION"), echo=self.verbose, future=True)
@@ -112,20 +113,17 @@ with Session(engine) as session:
     shard_id = 0
     items_in_shard = 0
 
-    shard = None
-
     encountered_items = []
     open_shards = []
 
     def close_last_shard():
         global encountered_items
+        
+        shard_thread = AsyncShardCloseThread(encountered_items, os.path.join("output", options.target_dataset_name), options.verbose, shard_id)
+        open_shards.append(shard_thread)
+        shard_thread.start()
 
-        if shard is not None:
-            shard_thread = AsyncShardCloseThread(encountered_items, shard, options.verbose, shard_id)
-            open_shards.append(shard_thread)
-            shard_thread.start()
-
-            encountered_items = []
+        encountered_items = []
     
     for image in session.execute(select(DatasetImage).where(DatasetImage.is_banned == False)).scalars().all():
         if items_in_shard > options.rows_per_shard:
@@ -133,9 +131,6 @@ with Session(engine) as session:
 
             shard_id += 1
             items_in_shard = 0
-        
-        if shard is None:
-            shard = open(os.path.join("output", options.target_dataset_name, f"train_{shard_id}.json"), 'w', encoding='utf-8')
         
         if not os.path.exists(os.path.join("output", options.target_dataset_name, f"train_{shard_id}")):
             os.makedirs(os.path.join("output", options.target_dataset_name, f"train_{shard_id}"))
