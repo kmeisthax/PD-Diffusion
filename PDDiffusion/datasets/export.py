@@ -13,6 +13,7 @@ from multiprocessing import Pool, TimeoutError
 import sys, os.path, json, threading
 
 def resize_image_process(open_location, save_location, size):
+    Image.MAX_IMAGE_PIXELS = 1_000_000_000_000
     result_object = {}
 
     try:
