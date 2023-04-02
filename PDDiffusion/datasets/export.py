@@ -72,9 +72,9 @@ class AsyncShardCloseThread(threading.Thread):
         with Session(engine) as session:
             for (item, resize_result) in self.encountered_items:
                 try:
-                    resize_result = resize_result.get(5*60)
+                    resize_result = resize_result.get(15*60)
                 except TimeoutError as e:
-                    resize_result = {"failure": f"Child process did not complete within 5 minutes"}
+                    resize_result = {"failure": f"Child process did not complete within 15 minutes"}
                 except Exception as e:
                     resize_result = {"failure": f"Child process failed with {e}"}
                 
