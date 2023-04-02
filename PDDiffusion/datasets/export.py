@@ -9,18 +9,16 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from PIL import Image
-from multiprocessing import Process, Pipe
+from multiprocessing import Pool
 import sys, os.path, json, threading
 
-def resize_image_process(open_location, save_location, size, return_pipe):
+def resize_image_process(open_location, save_location, size):
     result_object = {}
 
     try:
         if not image_is_valid(open_location):
             result_object["failure"] = f"Image {image.id} is corrupt, skipping"
-            return_pipe.send(result_object)
-            return_pipe.close()
-            return
+            return result_object
 
         image = Image.open(open_location)
         if image.width > size or image.height > size:
@@ -30,12 +28,10 @@ def resize_image_process(open_location, save_location, size, return_pipe):
         image.close()
         
         result_object["success"] = True
-        return_pipe.send(result_object)
-        return_pipe.close()
+        return result_object
     except Exception as e:
         result_object["failure"] = e
-        return_pipe.send(result_object)
-        return_pipe.close()
+        return result_object
 
 @dataclass
 class ExportOptions:
@@ -43,37 +39,6 @@ class ExportOptions:
     verbose: bool = field(default=False, metadata={"args": ["--verbose"], "help": "Log SQL statements as they execute"})
     rows_per_shard: int = field(default=1000, metadata={"args": ["--rows_per_shard"], "help": "How many images per CSV file"})
     maximum_image_size: int = field(default=512, metadata={"args": ["--maximum_image_size"], "help": "How large the images in the dataset should be"})
-
-class AsyncResizeThread(threading.Thread):
-    """Thread that opens an image, resizes it if it's too big, and saves it
-    somewhere else.
-    
-    Results are reported in the given result_object. No locking is performed on
-    the object; you must join this thread before accessing the results.
-    
-    This expects PIL to not hold the CPython GIL during the resize."""
-    def __init__(self, open_location, size, save_location, result_object):
-        super(AsyncResizeThread, self).__init__()
-
-        self.open_location = open_location
-        self.size = size
-        self.save_location = save_location
-        self.result_object = result_object
-    
-    def run(self):
-        (parent, child) = Pipe()
-        process = Process(target=resize_image_process, args=(self.open_location, self.save_location, self.size, child))
-        
-        try:
-            process.start()
-            child_result = parent.recv()
-            if "failure" in child_result:
-                self.result_object["failure"] = child_result["failure"]
-            elif "success" in child_result:
-                self.result_object["success"] = child_result["success"]
-        except EOFError as e:
-            self.result_object["failure"] = f"Child thread died with {e}"
-        process.join()
 
 class AsyncShardCloseThread(threading.Thread):
     """Thread that closes out a given shard.
@@ -83,12 +48,12 @@ class AsyncShardCloseThread(threading.Thread):
     def __init__(self, encountered_items, shard_save_location, verbose, id):
         """Create the async close thread.
         
-        The list of encountered items should be a list of 3-tuples, each one
+        The list of encountered items should be a list of 2-tuples, each one
         containing the following items:
         
          - The data item to save
-         - The resize thread that saved the image already
-         - The result object that the thread saves data to
+         - The process pool's AsyncResult, which will return the result of the
+         associated resize operation
         
         shard_save_location should be a valid path to save the shard to.
         verbose is whether or not we want database stuff to be printed.
@@ -104,9 +69,12 @@ class AsyncShardCloseThread(threading.Thread):
         engine = create_engine(os.getenv("DATABASE_CONNECTION"), echo=self.verbose, future=True)
 
         with Session(engine) as session:
-            for (item, resize_thread, resize_result) in self.encountered_items:
-                resize_thread.join()
-
+            for (item, resize_result) in self.encountered_items:
+                try:
+                    resize_result = resize_result.get()
+                except Exception as e:
+                    resize_result = {"failure": f"Child process failed with {e}"}
+                
                 if "success" in resize_result:
                     for label in session.execute(select(DatasetLabel).where(DatasetLabel.image_id == item["id"])).scalars().all():
                         item[label.data_key] = label.value
@@ -132,68 +100,66 @@ if __name__ == "__main__":
         os.makedirs(os.path.join("output", options.target_dataset_name))
 
     with Session(engine) as session:
-        keys = set()
-        for (key,) in session.execute(select(DatasetLabel.data_key).group_by(DatasetLabel.data_key)):
-            keys.add(key)
+        with Pool() as pool:
+            keys = set()
+            for (key,) in session.execute(select(DatasetLabel.data_key).group_by(DatasetLabel.data_key)):
+                keys.add(key)
 
-        shard_id = 0
-        items_in_shard = 0
-
-        encountered_items = []
-        open_shards = []
-
-        def close_last_shard():
-            global encountered_items
-            
-            shard_thread = AsyncShardCloseThread(encountered_items, os.path.join("output", options.target_dataset_name), options.verbose, shard_id)
-            open_shards.append(shard_thread)
-            shard_thread.start()
+            shard_id = 0
+            items_in_shard = 0
 
             encountered_items = []
-        
-        for image in session.execute(select(DatasetImage).where(DatasetImage.is_banned == False)).scalars().all():
-            if items_in_shard > options.rows_per_shard:
-                close_last_shard()
+            open_shards = []
 
-                shard_id += 1
-                items_in_shard = 0
+            def close_last_shard():
+                global encountered_items
+                
+                shard_thread = AsyncShardCloseThread(encountered_items, os.path.join("output", options.target_dataset_name), options.verbose, shard_id)
+                open_shards.append(shard_thread)
+                shard_thread.start()
+
+                encountered_items = []
             
-            if not os.path.exists(os.path.join("output", options.target_dataset_name, f"train_{shard_id}")):
-                os.makedirs(os.path.join("output", options.target_dataset_name, f"train_{shard_id}"))
+            for image in session.execute(select(DatasetImage).where(DatasetImage.is_banned == False)).scalars().all():
+                if items_in_shard > options.rows_per_shard:
+                    close_last_shard()
+
+                    shard_id += 1
+                    items_in_shard = 0
+                
+                if not os.path.exists(os.path.join("output", options.target_dataset_name, f"train_{shard_id}")):
+                    os.makedirs(os.path.join("output", options.target_dataset_name, f"train_{shard_id}"))
+                
+                if image.file is None or image.is_banned:
+                    continue
+                
+                if image.file.storage_provider != File.LOCAL_FILE:
+                    print(f"Non-local file provider {image.file.storage_provider}")
+                    continue
+
+                extracted = {}
+
+                extracted["dataset"] = image.dataset_id
+                extracted["id"] = image.id
+                
+                for key in keys:
+                    if key not in extracted:
+                        extracted[key] = ""
+
+                localfile = image.id.replace(":", "").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
+                target_filename = os.path.join("output", options.target_dataset_name, f"train_{shard_id}", localfile)
+                target_filename_relative_to_dataset = os.path.join(f"train_{shard_id}", localfile)
+                
+                extracted["image"] = target_filename_relative_to_dataset
+
+                process_result = pool.apply_async(resize_image_process, [image.file.url, target_filename, options.maximum_image_size])
+                encountered_items.append((extracted, process_result))
+
+                items_in_shard += 1
             
-            if image.file is None or image.is_banned:
-                continue
+            close_last_shard()
+
+            for thread in open_shards:
+                thread.join()
             
-            if image.file.storage_provider != File.LOCAL_FILE:
-                print(f"Non-local file provider {image.file.storage_provider}")
-                continue
-
-            extracted = {}
-
-            extracted["dataset"] = image.dataset_id
-            extracted["id"] = image.id
-            
-            for key in keys:
-                if key not in extracted:
-                    extracted[key] = ""
-
-            localfile = image.id.replace(":", "").replace("\"", "").replace("'", "").replace("?", "").replace("!", "").replace("*", "").strip()
-            target_filename = os.path.join("output", options.target_dataset_name, f"train_{shard_id}", localfile)
-            target_filename_relative_to_dataset = os.path.join(f"train_{shard_id}", localfile)
-            
-            extracted["image"] = target_filename_relative_to_dataset
-
-            result = {}
-            thread = AsyncResizeThread(image.file.url, options.maximum_image_size, target_filename, result)
-            encountered_items.append((extracted, thread, result))
-
-            thread.start()
-
-            items_in_shard += 1
-        
-        close_last_shard()
-
-        for thread in open_shards:
-            thread.join()
-        
-        print(f"Exported {shard_id * options.rows_per_shard + items_in_shard} items")
+            print(f"Exported {shard_id * options.rows_per_shard + items_in_shard} items")
