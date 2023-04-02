@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from PIL import Image
-from multiprocessing import Pool
+from multiprocessing import Pool, TimeoutError
 import sys, os.path, json, threading
 
 def resize_image_process(open_location, save_location, size):
@@ -71,7 +71,9 @@ class AsyncShardCloseThread(threading.Thread):
         with Session(engine) as session:
             for (item, resize_result) in self.encountered_items:
                 try:
-                    resize_result = resize_result.get()
+                    resize_result = resize_result.get(5*60)
+                except TimeoutError as e:
+                    resize_result = {"failure": f"Child process did not complete within 5 minutes"}
                 except Exception as e:
                     resize_result = {"failure": f"Child process failed with {e}"}
                 
