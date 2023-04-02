@@ -85,7 +85,7 @@ class AsyncShardCloseThread(threading.Thread):
                     json.dump(item, self.shard)
                     self.shard.write("\n")
                 else:
-                    print(f"Image {item['id']} could not be resized, got error {resize_result['failure']}")
+                    print(f"Shard {self.id}, image {item['id']} could not be resized, got error {resize_result['failure']}")
 
             self.shard.close()
         
