@@ -1,8 +1,10 @@
 from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
 
 from torchvision import transforms
-from datasets import Dataset
+from datasets import Dataset, Image as DatasetImage
 from PIL import Image
+
+import datasets, os.path, glob
 
 def convert_and_augment_pipeline(image_size):
     return transforms.Compose(
@@ -28,8 +30,28 @@ def transformer(image_size):
     
     return transform
 
-def load_dataset(image_size):
-    dataset = Dataset.from_generator(local_wikimedia)
+def append_base_path_fn(base_path):
+    def append_base_fn(path):
+        return {
+            "image": os.path.join(base_path, path)
+        }
+
+    return append_base_fn
+
+def load_dataset(dataset_name, image_size):
+    path = os.path.join("output", dataset_name)
+
+    dataset = datasets.load_dataset(
+        path=path,
+        name=dataset_name,
+        data_files=glob.glob("train_*.json", root_dir=path),
+        split="train"
+    ).map(
+        append_base_path_fn(path),
+        input_columns="image"
+    ).cast_column("image", DatasetImage())
+
+    print(f"Dataset loaded with {dataset.num_rows} rows")
 
     dataset.set_transform(transformer(image_size), columns=["image"], output_all_columns=True)
 

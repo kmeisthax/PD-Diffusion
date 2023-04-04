@@ -9,7 +9,7 @@ from diffusers import UNet2DModel, UNet2DConditionModel, DDPMPipeline
 from transformers import CLIPModel, CLIPTextModel, CLIPProcessor, CLIPFeatureExtractor, CLIPTokenizer
 from datasets import Dataset, Features, Value, Image as DatasetsImage
 from tqdm.auto import tqdm
-import os.path, json, torch, math
+import os.path, json, torch, math, datasets
 from dataclasses import field
 from argparse_dataclass import dataclass
 from PIL import Image
@@ -27,6 +27,7 @@ class TrainingOptions:
     lr_warmup_steps: int = field(default=500, metadata={"args": ["--lr_warmup_steps"]})
 
     #Data load strategy
+    dataset_name: str = field(default="", metadata={"args": ["--dataset_name"], "help": "Dataset name to train on"})
     pin_data_in_memory: bool = field(default=False, metadata={"args": ["--pin_data_in_memory"], "help": "Force dataset to remain in CPU memory"})
     data_load_workers: int = field(default=0, metadata={"args": ["--data_load_workers"], "help": "Number of workers to load data with"})
     image_limit: float = field(default=None, metadata={"args": ["--image_limit"], "help": "Number of images per batch to train"})
@@ -165,9 +166,9 @@ def load_dataset_with_condition(config, accelerator):
     Returns the conditional model configuration if applicable."""
 
     if config.conditioned_on is None:
-        return (load_dataset(config.image_size), None)
+        return (load_dataset(config.dataset_name, config.image_size), None)
     
-    dataset = Dataset.from_generator(local_wikimedia_base)
+    dataset = datasets.load_dataset(path=os.path.join("output", config.dataset_name), split="train")
 
     transform = transformer(config.image_size)
 
