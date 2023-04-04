@@ -1,14 +1,13 @@
-from PDDiffusion.datasets.WikimediaCommons import local_wikimedia_base
 from PDDiffusion.datasets.augment import augment_labels
+from PDDiffusion.datasets.load import load_dataset
+from PDDiffusion.image_loader import append_base_path_fn
 
 from transformers import CLIPModel, CLIPTokenizer, CLIPFeatureExtractor, CLIPProcessor
-from datasets import Dataset
 import os.path, json
 
 from torchvision import transforms
-from datasets import Dataset
 
-import torch
+import torch, datasets, os.path
 
 def load_model_and_progress(config, processor):
     model = CLIPModel(config.as_clip_config(processor.tokenizer))
@@ -71,8 +70,20 @@ def transformer(image_size, processor):
     
     return transform
 
-def load_dataset_with_processor(image_size, processor):
-    dataset = Dataset.from_generator(local_wikimedia_base)
+def load_dataset_with_processor(dataset_name, image_size, processor):
+    """Load a dataset with an image column.
+    
+    This works similarly to the generic loader in image_loader.py, but we
+    require an additional transform step with an image normalizer for CLIP
+    things to work."""
+    path = os.path.join("output", dataset_name)
+
+    dataset = load_dataset(dataset_name).map(
+        append_base_path_fn(path),
+        input_columns="image"
+    ).cast_column("image", datasets.Image())
+
+    print(f"Dataset loaded with {dataset.num_rows} rows")
 
     dataset.set_transform(transformer(image_size, processor), output_all_columns=True)
 

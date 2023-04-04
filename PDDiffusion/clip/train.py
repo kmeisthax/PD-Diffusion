@@ -19,6 +19,7 @@ import sys, os.path, json, torch
 @dataclass
 class CLIPTrainingOptions:
     output_dir: str = field(default='pd-diffusion-clip', metadata={"args": ["output_dir"], "help": "Where to store the trained model"})
+    dataset_name: str = field(default="", metadata={"args": ["--dataset_name"], "help": "Dataset name to train on"})
 
     #Training loop parameters
     train_batch_size: int = field(default = 16, metadata={"args": ["--train_batch_size"], "help": "How many images to train per step. Will be reduced automatically if this exceeds the memory size of your GPU."})
@@ -111,7 +112,7 @@ if accelerator.is_main_process:
     accelerator.init_trackers("train_example")
 
 processor = load_processor(config)
-dataset = load_dataset_with_processor(config.vision_image_size, processor)
+dataset = load_dataset_with_processor(config.dataset_name, config.vision_image_size, processor)
 (model, progress) = load_model_and_progress(config, processor)
 
 def collate_fn(examples):
