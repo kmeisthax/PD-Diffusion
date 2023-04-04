@@ -12,7 +12,6 @@ from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 config = TrainingOptions.parse_args(sys.argv[1:])
-config.dataset_name = "pd-diffusion-wikimedia"
 
 if not os.path.exists("output"):
     os.makedirs("output")
