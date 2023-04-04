@@ -1,7 +1,7 @@
 from PDDiffusion.datasets.WikimediaCommons import local_wikimedia
+from PDDiffusion.datasets.load import load_dataset
 
 from torchvision import transforms
-from datasets import Dataset, Image as DatasetImage
 from PIL import Image
 
 import datasets, os.path, glob
@@ -38,18 +38,18 @@ def append_base_path_fn(base_path):
 
     return append_base_fn
 
-def load_dataset(dataset_name, image_size):
+def load_dataset_with_imagery(dataset_name, image_size):
+    """Load a dataset with an image column.
+    
+    This uses our custom dataset loader, fixing up the image column to actually
+    contain trainable images. It also applies a basic image sizing and
+    augmentation pipeline."""
     path = os.path.join("output", dataset_name)
 
-    dataset = datasets.load_dataset(
-        path=path,
-        name=dataset_name,
-        data_files=glob.glob("train_*.json", root_dir=path),
-        split="train"
-    ).map(
+    dataset = load_dataset(dataset_name).map(
         append_base_path_fn(path),
         input_columns="image"
-    ).cast_column("image", DatasetImage())
+    ).cast_column("image", datasets.Image())
 
     print(f"Dataset loaded with {dataset.num_rows} rows")
 
