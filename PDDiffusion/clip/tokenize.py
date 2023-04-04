@@ -2,6 +2,7 @@
 
 from PDDiffusion.datasets.WikimediaCommons import local_wikimedia_base
 from PDDiffusion.datasets.augment import all_labels_in_item
+from PDDiffusion.datasets.load import load_dataset
 
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
@@ -16,6 +17,7 @@ import os.path, sys, json
 @dataclass
 class TokenizerTrainingOptions:
     output_dir: str = field(default='pd-diffusion-clip', metadata={"args": ["output_dir"], "help": "Where to store the tokenizer vocabulary"})
+    dataset_name: str = field(default="", metadata={"args": ["--dataset_name"], "help": "Dataset name to train on"})
 
 def label_extractor(dataset_gen):
     for item in dataset_gen:
@@ -28,14 +30,7 @@ tokenizer = Tokenizer(model)
 trainer = BpeTrainer(special_tokens=["[UNK]", "[PAD]", "[START]", "[END]"])
 
 tokenizer.pre_tokenizer = Whitespace()
-
-#Preload the entire dataset because SQLite does not support the kind of
-#multithreaded nonsense that Tokenizers wants to do.
-label_set = []
-for item in label_extractor(local_wikimedia_base(load_images=False)):
-    label_set.append(item)
-
-tokenizer.train_from_iterator(label_set.__iter__(), trainer=trainer)
+tokenizer.train_from_iterator(label_extractor(load_dataset(config.dataset_name)), trainer=trainer)
 
 if not os.path.exists("output"):
     os.makedirs("output")
