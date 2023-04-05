@@ -1,6 +1,5 @@
-from PDDiffusion.datasets.WikimediaCommons import local_wikimedia_base
 from PDDiffusion.datasets.augment import augment_labels
-from PDDiffusion.image_loader import load_dataset, convert_and_augment_pipeline, transformer
+from PDDiffusion.image_loader import load_dataset_with_imagery, convert_and_augment_pipeline, transformer
 from PDDiffusion.unet.test import load_pretrained_unet
 from PDDiffusion.unet.pipeline import DDPMConditionalPipeline
 
@@ -165,12 +164,9 @@ def load_dataset_with_condition(config, accelerator):
     
     Returns the conditional model configuration if applicable."""
 
+    dataset = load_dataset_with_imagery(config.dataset_name, config.image_size)
     if config.conditioned_on is None:
-        return (load_dataset(config.dataset_name, config.image_size), None)
-    
-    dataset = datasets.load_dataset(path=os.path.join("output", config.dataset_name), split="train")
-
-    transform = transformer(config.image_size)
+        return (dataset, None)
 
     with torch.no_grad():
         (cond_processor, cond_model) = load_condition_model_and_processor(config)
@@ -264,7 +260,6 @@ def load_dataset_with_condition(config, accelerator):
             input_columns=None,
             batched=True,
             batch_size=None)
-        dataset.set_transform(transform, columns=["image"], output_all_columns=True)
 
         return (dataset, cond_config)
 
