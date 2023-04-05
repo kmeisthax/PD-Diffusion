@@ -80,7 +80,8 @@ class AsyncShardCloseThread(threading.Thread):
                 
                 if "success" in resize_result:
                     for label in session.execute(select(DatasetLabel).where(DatasetLabel.image_id == item["id"])).scalars().all():
-                        item[label.data_key] = label.value
+                        if label.data_key != "image":
+                            item[label.data_key] = label.value
 
                     json.dump(item, self.shard)
                     self.shard.write("\n")
