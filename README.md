@@ -178,7 +178,7 @@ Public-domain status is currently determined by a category walk from `PD-Art (PD
 
 The licensing status of non-image data is more complicated. Wikimedia Commons' policy is that *structured* data is CC0 while *unstructured* data is CC-BY-SA. Some images have further requirements over the unstructured data. Currently, we use both. Trained models that see the unstructured data would be considered derivative works, but the copyright on label data would not "infect" the generated output images.
 
-### Labeling tool
+#### Labeling tool
 
 ```
 python -m PDDiffusion.datasets.WikimediaCommons.labeling_tool
@@ -191,6 +191,16 @@ Unlabeled is determined solely by the caption field and not any other data state
 ### Smithsonian Open Access
 
 TODO: Under consideration.
+
+## Exporting a dataset for use
+
+The dataset scrapers above download data into a SQL database of your choosing. However, this is unsuitable for training; Huggingface prefers working with flat files cut up into shards. You must first export your data into a dataset, like so:
+
+```
+python -m PDDiffusion.datasets.export pddiffusion-wikimediacommons-10k
+```
+
+All data currently scraped will be saved to the exported dataset. Datasets - as well as all training products of PDDiffusion - are stored in the `output` directory. If you intend to upload your model to Huggingface, you'll need to create a separate Git repository with LFS in order to upload it there.
 
 ## Models
 
@@ -210,7 +220,7 @@ CLIP is a multimodal image and text classifier. It compresses text and images in
 CLIP does not take text or image input directly. Instead, text is *tokenized* and images are *normalized*. For text, we have to pretrain a tokenizer on the text labels in our training set, as such:
 
 ```
-python -m PDDiffusion.clip.tokenize <name of your model>
+python -m PDDiffusion.clip.tokenize --dataset_name <name of your dataset> <name of your model>
 ```
 
 There is currently no step for training the image normalizer from scratch; it only has six parameters (mean/std of R, G, and B) and we use the ones from OpenAI CLIP.
@@ -218,7 +228,7 @@ There is currently no step for training the image normalizer from scratch; it on
 Once CLIP's tokenizer vocabulary has been determined, you can train CLIP itself:
 
 ```
-python -m PDDiffusion.clip.train <name of your model>
+python -m PDDiffusion.clip.train --dataset_name <name of your dataset> <name of your model>
 ```
 
 Your output directory should be separate from the directory you store your U-Nets and must match the directory you tokenized in.
@@ -236,7 +246,7 @@ The U-Net is the model used to actually draw images. It can be adapted to run wi
 To train unconditionally:
 
 ```
-python -m PDDiffusion.unet.train <name of your model>
+python -m PDDiffusion.unet.train --dataset_name <name of your dataset> <name of your model>
 ```
 
 The default parameters are to save every training epoch. This allows reloading from disk if the training process falls over and dies. Trained model weights will be stored in the output directory you specify.
@@ -248,7 +258,7 @@ The script may also evaluate your model by generating images for you to inspect 
 If you trained CLIP as described above, you may provide your trained CLIP model using the `--conditioned_on` parameter.
 
 ```
-python -m PDDiffusion.unet.train --conditioned_on <name of your CLIP source> --evaluation_prompt <image prompt to use during evaluation> <name of your model>
+python -m PDDiffusion.unet.train --dataset_name <name of your dataset> --conditioned_on <name of your CLIP source> --evaluation_prompt <image prompt to use during evaluation> <name of your model>
 ```
 
 Please make sure to not save your U-Net in the same location you saved your CLIP model.
