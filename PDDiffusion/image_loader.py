@@ -32,9 +32,14 @@ def transformer(image_size):
 
 def append_base_path_fn(base_path):
     def append_base_fn(path):
-        return {
-            "image": os.path.join(base_path, path)
-        }
+        if type(path) == str and os.path.exists(base_path): #Path to local file
+            return {
+                "image": os.path.join(base_path, path)
+            }
+        else: #No base path or dataset already has loaded image data
+            return {
+                "image": path
+            }
 
     return append_base_fn
 
