@@ -225,6 +225,11 @@ python -m PDDiffusion.clip.tokenize --dataset_name <name of your dataset> <name 
 
 There is currently no step for training the image normalizer from scratch; it only has six parameters (mean/std of R, G, and B) and we use the ones from OpenAI CLIP.
 
+Several CLIP-related model parameters are also fixed at tokenization time; they are:
+
+ * `--vision_image_size` - the size of the images that CLIP can view
+ * `--text_max_position_embeddings` - the number of tokens (words or characters) that CLIP can read
+
 Once CLIP's tokenizer vocabulary has been determined, you can train CLIP itself:
 
 ```
@@ -297,7 +302,7 @@ Manually corehack the offending `file_based_local_timer.py` file in your virtual
 
 ## Directory does not appear to have a file named preprocessor_config.json
 
-This error happens when you try to train conditional U-Nets against a partially-saved CLIP. It happens because I haven't yet gotten the tokenizer to spit out the vision side of the CLIP configuration. In the meantime, you can copy this from OpenAI's CLIP, since it's identical to the defaults in Huggingface and not copyrightable.
+This error happens when you try to train conditional U-Nets against a partially-saved CLIP. This has been fixed, but if you have a model that is still missing this file, you can copy this from OpenAI's CLIP, since it's identical to the defaults in Huggingface and not copyrightable.
 
 ```
 {
