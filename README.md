@@ -325,3 +325,11 @@ This error happens when you try to train conditional U-Nets against a partially-
   "size": 224
 }
 ```
+
+## The `backend_tokenizer` provided does not match the expected format.
+
+Transformers 4.17+ added a new tokenizer format for CLIP's text head. You can convert old models to the new format with:
+
+```
+python -m PDDiffusion.clip.update_tokenizer <name of your CLIP model>
+```
