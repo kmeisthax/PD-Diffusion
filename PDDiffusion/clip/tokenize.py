@@ -9,7 +9,7 @@ from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 from tokenizers.pre_tokenizers import Whitespace
 
-from transformers import CLIPModel, CLIPTokenizer, CLIPFeatureExtractor, CLIPProcessor
+from transformers import CLIPModel, CLIPTokenizerFast, CLIPFeatureExtractor, CLIPProcessor
 
 from dataclasses import field
 from argparse_dataclass import dataclass
@@ -51,7 +51,7 @@ feature_extractor = CLIPFeatureExtractor(
 tokenizer.save(os.path.join(outpath, "tokenizer.json"))
 model.save(outpath)
 
-clip_tokenizer = CLIPTokenizer(
+clip_tokenizer = CLIPTokenizerFast(
     vocab_file = os.path.join(outpath, "vocab.json"),
     merges_file = os.path.join(outpath, "merges.txt"),
     tokenizer_file = os.path.join(outpath, "tokenizer.json"),
@@ -59,7 +59,8 @@ clip_tokenizer = CLIPTokenizer(
     pad_token="[PAD]",
     bos_token="[START]",
     eos_token="[END]",
-    model_max_length = config.text_max_position_embeddings
+    model_max_length = config.text_max_position_embeddings,
+    from_slow=True
 )
 
 processor = CLIPProcessor(feature_extractor, clip_tokenizer)
