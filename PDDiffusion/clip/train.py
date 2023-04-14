@@ -111,9 +111,9 @@ accelerator = Accelerator(
 if accelerator.is_main_process:
     accelerator.init_trackers("train_example")
 
-processor = load_processor(config)
+processor = load_processor(config.output_dir)
 dataset = load_dataset_with_processor(config.dataset_name, config.vision_image_size, processor)
-(model, progress) = load_model_and_progress(config, processor)
+(model, progress) = load_model_and_progress(config, new_model_config=config.as_clip_config(processor.tokenizer))
 
 def collate_fn(examples):
     pixel_values = torch.stack([example["image"] for example in examples])

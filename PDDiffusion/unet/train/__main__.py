@@ -27,7 +27,7 @@ def train_loop(config):
     if accelerator.is_main_process:
         accelerator.init_trackers("train_example")
     
-    (dataset, cond_model_config) = load_dataset_with_condition(config, accelerator)
+    (dataset, cond_model_config) = load_dataset_with_condition(config)
 
     @find_executable_batch_size(starting_batch_size=config.train_batch_size)
     def inner_training_loop(batch_size):

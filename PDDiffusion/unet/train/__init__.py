@@ -151,117 +151,26 @@ def load_model_and_progress(config, conditional_model_config=None):
 
     return (model, progress)
 
-def load_dataset_with_condition(config, accelerator):
+def load_dataset_with_condition(config):
     """Load all our datasets.
 
     If the config calls for conditional training, we will load the specified
-    conditional model and insert condition vectors into the dataset. This is an
-    all-at-once process so that the conditional model does not remain loaded in
-    accelerator memory during the training process.
-    
-    All models used in this process will be loaded onto the given accerlator
-    and then unloaded when done.
-    
-    Returns the conditional model configuration if applicable."""
+    conditional model's configuration and return it, too. We expect the dataset
+    being loaded to contain precalculated CLIP vectors to train on. We do not
+    calculate CLIP vectors at run time so that the CLIP model does not remain
+    loaded in accelerator memory during the training process.
+
+    If this is unconditional training then no configuration for the CLIP model
+    will be returned."""
 
     dataset = load_dataset_with_imagery(config.dataset_name, config.image_size)
     if config.conditioned_on is None:
         return (dataset, None)
+    
+    (cond_processor, cond_model) = load_condition_model_and_processor(config)
+    cond_config = cond_model.config
 
-    with torch.no_grad():
-        (cond_processor, cond_model) = load_condition_model_and_processor(config)
-        clip_preprocess = convert_and_augment_pipeline(cond_model.vision_model.config.image_size)
-
-        #Extract the config outside of the batched/no-grad area
-        cond_config = cond_model.config
-
-        def clip_classify(data_items, num_augments = 4):
-            """Computes CLIP vectors for all data items in the model.
-            
-            Intended to be used as a datasets map function, called with all the
-            data in one go. Batches calculations internally.
-            
-            Inserts a new column into the output called "condition". This is a
-            Torch tensor of dimension (d, 2a, c):
-            
-             - *d* refers to the number of Data items in the dataset
-             - *a* refers to the number of Augments calculated per dataset item
-                   (we generate both an image and text side vector per augment)
-             - *c* refers to the length of CLIP's output vector
-            
-            By default, we prepare four image augments and four text augments.
-            These are calcluated by shuffling the text parameters around with
-            augment_labels, and the images around with clip_preprocess, which
-            applies flips to the image."""
-            nonlocal cond_model
-
-            cond_model = accelerator.prepare(cond_model)
-
-            clip_batch_size = config.clip_batch_size
-
-            @find_executable_batch_size(starting_batch_size=clip_batch_size)
-            def inner_batch(batch_size):
-                progress_bar = tqdm(total=math.ceil(len(data_items["image"]) / batch_size), disable=not accelerator.is_local_main_process)
-                progress_bar.set_description(f"CLIP Image Processing")
-
-                conditions = []
-
-                if str(cond_model.device).startswith("cuda:"):
-                    progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
-
-                for i in range(0, len(data_items["image"]), batch_size):
-                    if str(cond_model.device).startswith("cuda:"):
-                        progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
-                    
-                    clip_images = [clip_preprocess(image.convert("RGB")) for _ in range(0, num_augments) for image in data_items["image"][i:i+batch_size]]
-                    encoded_images = cond_processor(images=clip_images, return_tensors="pt")["pixel_values"]
-                    encoded_text = cond_processor(text=augment_labels(data_items, i, i+batch_size, num_augments), padding='max_length', truncation=True, max_length=cond_model.text_model.config.max_position_embeddings)
-
-                    encoded_text_ids = torch.tensor(encoded_text["input_ids"])
-                    encoded_text_mask = torch.tensor(encoded_text["attention_mask"])
-
-                    if cond_model.device != "cpu":
-                        encoded_images = encoded_images.to(cond_model.device)
-                        encoded_text_ids = encoded_text_ids.to(cond_model.device)
-                        encoded_text_mask = encoded_text_mask.to(cond_model.device)
-                    
-                    condition = cond_model(input_ids=encoded_text_ids, attention_mask=encoded_text_mask, pixel_values=encoded_images)
-                    image_embeds = condition.image_embeds.reshape(condition.image_embeds.shape[0] // num_augments, num_augments, *list(condition.image_embeds.shape[1:]))
-                    text_embeds = condition.text_embeds.reshape(condition.image_embeds.shape[0] // num_augments, num_augments, *list(condition.text_embeds.shape[1:]))
-
-                    if config.mixed_precision == "fp16":
-                        image_embeds = image_embeds.type(torch.float16)
-                        text_embeds = text_embeds.type(torch.float16)
-                    elif config.mixed_precision == "bf16":
-                        image_embeds = image_embeds.type(torch.bfloat16)
-                        text_embeds = text_embeds.type(torch.bfloat16)
-                    else:
-                        image_embeds = image_embeds.type(torch.float32)
-                        text_embeds = text_embeds.type(torch.float32)
-                    
-                    for (image_row, text_row) in zip(image_embeds, text_embeds):
-                        conditions.append(torch.concat((image_row, text_row)))
-                    
-                    progress_bar.update(1)
-                
-                if str(cond_model.device).startswith("cuda:"):
-                    #Fully unload CLIP off the GPU since we won't need it anymore.
-                    torch.cuda.empty_cache()
-                    progress_bar.set_postfix({"mem": torch.cuda.memory_allocated(), "max": torch.cuda.max_memory_allocated()})
-                
-                return {
-                    "image": data_items["image"],
-                    "conditions": conditions,
-                }
-            
-            return inner_batch()
-        
-        dataset = dataset.map(clip_classify,
-            input_columns=None,
-            batched=True,
-            batch_size=None)
-
-        return (dataset, cond_config)
+    return (dataset, cond_config)
 
 def create_model_pipeline(config, accelerator, model, noise_scheduler):
     """Create a model pipeline for evaluation or saving."""

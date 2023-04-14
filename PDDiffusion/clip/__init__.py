@@ -9,40 +9,40 @@ from torchvision import transforms
 
 import torch, datasets, os.path
 
-def load_model_and_progress(config, processor):
-    model = CLIPModel(config.as_clip_config(processor.tokenizer))
+def load_model_and_progress(model_name, new_model_config=None):
+    """Load a model from disk. Also returns its progress file if present.
+    
+    If the model does not exist and a `new_model_config` is provided, then we
+    will return a new model and progress object.
+    
+    If the model has no progress file, then the progress object returned will
+    be None."""
 
-    modeldir = os.path.join("output", config.output_dir)
+    #TODO: We don't actually SAVE the progress file so that should go away.
+    #CLIPTrainer handles checkpointing.
+
+    modeldir = os.path.join("output", model_name)
     progressfile = os.path.join(modeldir, "progress.json")
 
-    if os.path.exists(progressfile):
+    if os.path.exists(modeldir):
         model = CLIPModel.from_pretrained(modeldir)
-        with open(progressfile, 'r') as progressfile_json:
-            progress = json.load(progressfile_json)
+        if os.path.exists(progressfile):
+            with open(progressfile, 'r') as progressfile_json:
+                progress = json.load(progressfile_json)
 
-            return (model, progress)
-    else:
+                return (model, progress)
+        else:
+            return (model, None)
+    elif new_model_config is not None:
+        model = CLIPModel(new_model_config)
+
         return (model, {"last_epoch": -1})
+    else:
+        raise Exception(f"Model {model_name} not found on disk and no new model config was provided")
 
-def load_processor(config):
-    """Load a tokenizer & feature extractor combo that was previously trained and saved in the CLIP model directory."""
-    return CLIPProcessor(
-        #TODO: Actually calculate dataset image means/stds
-        feature_extractor=CLIPFeatureExtractor(
-            size=config.vision_image_size,
-            crop_size=config.vision_image_size,
-        ),
-        tokenizer = CLIPTokenizer(
-            vocab_file = os.path.join("output", config.output_dir, "vocab.json"),
-            merges_file = os.path.join("output", config.output_dir, "merges.txt"),
-            tokenizer_file = os.path.join("output", config.output_dir, "tokenizer.json"),
-            unk_token="[UNK]",
-            pad_token="[PAD]",
-            bos_token="[START]",
-            eos_token="[END]",
-            model_max_length = config.text_max_position_embeddings
-        )
-    )
+def load_processor(model_name):
+    """Load a tokenizer & feature extractor combo that was previously trained."""
+    return CLIPProcessor.from_pretrained(os.path.join("output", model_name))
 
 def convert_and_augment_pipeline(image_size, mean, std):
     return transforms.Compose(

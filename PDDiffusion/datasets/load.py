@@ -11,12 +11,15 @@ def load_dataset(dataset_name):
     that won't be tripped up by people storing everything on Huggingface."""
     path = os.path.join("output", dataset_name)
     if os.path.exists(path):
-        dataset = datasets.load_dataset(
-            path=path,
-            name=dataset_name,
-            data_files=glob.glob("train_*.json", root_dir=path),
-            split="train"
-        )
+        try:
+            dataset = datasets.load_dataset(
+                path=path,
+                name=dataset_name,
+                data_files=glob.glob("train_*.json", root_dir=path),
+                split="train"
+            )
+        except ValueError: #save_to_disk/pyarrow dataset
+            dataset = datasets.load_from_disk(path)
     else: #HF Hub dataset
         dataset = datasets.load_dataset(
             dataset_name,
