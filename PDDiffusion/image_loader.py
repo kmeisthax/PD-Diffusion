@@ -33,6 +33,11 @@ def transformer(image_size):
 def append_base_path_fn(base_path):
     def append_base_fn(path):
         if type(path) == str and os.path.exists(base_path): #Path to local file
+            if os.path.sep == "/" and "\\" in path and os.path.sep not in path: #Catch datasets exported on Windows & normalize them
+                path = os.path.join(*(path.split("\\")))
+            elif os.path.sep == "\\" and "/" in path and os.path.sep not in path: #Same for Linux/macOS paths on Windows
+                path = os.path.join(*(path.split("/")))
+            
             return {
                 "image": os.path.join(base_path, path)
             }
