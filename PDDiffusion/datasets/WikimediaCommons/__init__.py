@@ -372,8 +372,14 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
             iiprop=["url", "size"],
             iilimit=100,
             cllimit="max",
-            clshow="hidden",
+            clshow="!hidden",
             rvprop=["timestamp", "user"]
+        )
+
+        hidden_category_data = conn.query_all(
+            titles=titles_to_query,
+            prop=["categories"],
+            clshow="hidden"
         )
 
         titles_returned = []
@@ -416,8 +422,16 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
             if "terms" in query_data["query"]["pages"][page_id]:
                 metadata["terms"] = query_data["query"]["pages"][page_id]["terms"]
             
+            all_cats = []
+            
             if "categories" in query_data["query"]["pages"][page_id]:
-                metadata["categories"] = query_data["query"]["pages"][page_id]["categories"]
+                all_cats += query_data["query"]["pages"][page_id]["categories"]
+            
+            if "categories" in hidden_category_data["query"]["pages"][page_id]:
+                all_cats += hidden_category_data["query"]["pages"][page_id]["categories"]
+            
+            if len(all_cats) > 0:
+                metadata["categories"] = all_cats
             
             #TODO: What if MediaWiki just... doesn't give us metadata back?
             page_text = conn.parse_tree(corresponding_title)
