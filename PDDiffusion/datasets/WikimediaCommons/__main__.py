@@ -1,5 +1,5 @@
 from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage
-from PDDiffusion.datasets.WikimediaCommons import Connection, DEFAULT_UA, BASE_API_ENDPOINT, PD_ART_CATEGORY_OLD100, LOCAL_STORAGE, scrape_and_save_metadata
+from PDDiffusion.datasets.WikimediaCommons import Connection, DEFAULT_UA, BASE_API_ENDPOINT, PD_ART_CATEGORY_OLD100, LOCAL_STORAGE, scrape_and_save_metadata, chunked_iterable
 from PDDiffusion.datasets.model import Dataset
 import os.path, sys, itertools
 from dataclasses import field
@@ -7,14 +7,6 @@ from argparse_dataclass import dataclass
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
-
-def chunked_iterable(iterable, size):
-    it = iter(iterable)
-    while True:
-        chunk = tuple(itertools.islice(it, size))
-        if not chunk:
-            break
-        yield chunk
 
 @dataclass
 class WikimediaScrapeOptions:

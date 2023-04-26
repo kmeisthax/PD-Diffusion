@@ -7,6 +7,17 @@ from PDDiffusion.datasets.validity import image_is_valid
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
+from sqlalchemy.engine import Row
+
+import itertools
+
+def chunked_iterable(iterable, size):
+    it = iter(iterable)
+    while True:
+        chunk = tuple(itertools.islice(it, size))
+        if not chunk:
+            break
+        yield chunk
 
 LOCAL_STORAGE = os.path.join("sets", "wikimedia")
 LOCAL_RESIZE_CACHE = os.path.join("sets", "wikimedia-cache")
@@ -113,16 +124,23 @@ class Connection(object):
          * If a value is a dict, we recursively apply the rules to its keys and
          values."""
         
-        last_query = self.query(titles, prop, **kwargs)
-        data = last_query["query"]
-
+        if len(titles) > 50:
+            output = {}
+            for chunk in chunked_iterable(titles, 50):
+                output = dict_merge(output, self.query_all(titles=chunk, prop=prop, **kwargs))
+            
+            return output
+        else:
+            last_query = self.query(titles, prop, **kwargs)
+            data = last_query["query"]
+        
         while "batchcomplete" not in last_query:
             continue_kwargs = kwargs.copy()
             for continue_key in last_query["continue"].keys():
                 continue_kwargs[continue_key] = last_query["continue"][continue_key]
             
             last_query = self.query(titles, prop, **continue_kwargs)
-            data = dict_merge(data, last_query["query"])
+            data = dict_merge(data, last_query["query"], path=["query"])
         
         last_query["query"] = data
         return last_query
@@ -154,24 +172,64 @@ class Connection(object):
 
         return urllib.request.urlopen(url)
 
-def dict_merge(dict1, dict2):
+def dict_merge(dict1, dict2, path=[]):
     """Merge dictionaries' keys in such a way that lists are merged rather than
     being overwritten.
     
-    This mutates the first dict, like dict.update."""
+    This mutates the first dict, like dict.update.
+    
+    `path` is the full path to the data being merged from the root object.
+    Certain paths are special-cased (e.g. query pages) to deal with Mediawiki
+    API weirdness, such as negative IDs being assigned ad-hoc to pages that
+    don't exist. Negative IDs in dict2 with conflicting ID numbers to that of
+    dict1 will be renumbered in this case, with page titles being used to
+    detect conflicts."""
+    
+    pages_to_ids = {}
+    if path == ["query", "pages"]:
+        last_denormal_key = 0
+        for key in dict1.keys():
+            pages_to_ids[dict1[key]["title"]] = key
+            if int(key) < 0:
+                last_denormal_key = min(last_denormal_key, int(key))
+        
+        for key in dict2.keys():
+            if dict2[key]["title"] not in pages_to_ids:
+                if int(key) > 0:
+                    pages_to_ids[dict2[key]["title"]] = key
+                else:
+                    last_denormal_key -= 1
+                    if last_denormal_key in dict1:
+                        raise Exception(f"Key {last_denormal_key} should be unique but isn't")
 
-    for key in dict2.keys():
-        if key not in dict1:
-            dict1[key] = dict2[key]
-        elif type(dict1[key]) == list and type(dict2[key]) == list:
-            dict1[key] = dict1[key] + dict2[key]
-        elif type(dict1[key]) == dict and type(dict2[key]) == dict:
-            dict1[key] = dict_merge(dict1[key], dict2[key])
-        else:
-            if type(dict1[key]) != type(dict2[key]):
-                raise Exception(f"Type of key {key} changed from {type(dict1[key])} to {type(dict2[key])} across requests")
-            
-            dict1[key] = dict2[key]
+                    pages_to_ids[dict2[key]["title"]] = str(last_denormal_key)
+        
+        for key in dict2.keys():
+            normalized_key = pages_to_ids[dict2[key]["title"]]
+            if normalized_key not in dict1:
+                dict1[normalized_key] = dict2[key]
+            elif type(dict1[normalized_key]) == list and type(dict2[key]) == list:
+                dict1[normalized_key] = dict1[normalized_key] + dict2[key]
+            elif type(dict1[normalized_key]) == dict and type(dict2[key]) == dict:
+                dict1[normalized_key] = dict_merge(dict1[normalized_key], dict2[key], path=path + [key])
+            else:
+                if type(dict1[normalized_key]) != type(dict2[key]):
+                    raise Exception(f"Type of key {key} changed from {type(dict1[normalized_key])} to {type(dict2[key])} across requests")
+                
+                dict1[normalized_key] = dict2[key]
+    else:
+        for key in dict2.keys():
+            if key not in dict1:
+                dict1[key] = dict2[key]
+            elif type(dict1[key]) == list and type(dict2[key]) == list:
+                dict1[key] = dict1[key] + dict2[key]
+            elif type(dict1[key]) == dict and type(dict2[key]) == dict:
+                dict1[key] = dict_merge(dict1[key], dict2[key], path=path + [key])
+            else:
+                if type(dict1[key]) != type(dict2[key]):
+                    raise Exception(f"Type of key {key} changed from {type(dict1[key])} to {type(dict2[key])} across requests")
+                
+                dict1[key] = dict2[key]
     
     return dict1
 
@@ -270,25 +328,63 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
     titles_to_query = []     #List of page titles to put into the metadata query
     successful_items = set() #List of pages that we scraped successfully, for limit counting
 
+    #If we have bare titles we haven't seen before, we have to ask for the IDs
+    unknown_id_titles = []
+    for page in pages:
+        if type(page) == str:
+            localdata = session.execute(
+                select(WikimediaCommonsImage, DatasetImage)
+                    .outerjoin(DatasetImage, WikimediaCommonsImage.id == DatasetImage.id)
+                    .where(WikimediaCommonsImage.id == page, WikimediaCommonsImage.dataset_id == dataset_id)
+            ).one_or_none()
+
+            if localdata is None:
+                unknown_id_titles.append(page)
+    
+    unknown_id_page_ids = {}
+    
+    if len(unknown_id_titles) > 0:
+        the_ids_query = conn.query_all(titles=unknown_id_titles)
+        for page_id in the_ids_query["query"]["pages"].keys():
+            corresponding_title = the_ids_query["query"]["pages"][page_id]["title"]
+            if int(page_id) >= 0:
+                unknown_id_page_ids[corresponding_title] = page_id
+            else:
+                unknown_id_page_ids[corresponding_title] = "-1"
+    
     for page in pages:
         item = {}
 
-        #First, we need to determine if we've gotten a page title/id pair, or a
+        #Bare titles get turned into dicts
+        if type(page) == str:
+            page = {"title": page}
+        
+        #Then, we need to determine if we've gotten a page title/id pair, or a
         #database item.
         if type(page) == dict: #pageid/title dict
             localdata = session.execute(
                 select(WikimediaCommonsImage, DatasetImage)
-                    .join_from(WikimediaCommonsImage, DatasetImage, WikimediaCommonsImage.base_image)
+                    .outerjoin(DatasetImage, WikimediaCommonsImage.id == DatasetImage.id)
                     .where(WikimediaCommonsImage.id == page["title"], WikimediaCommonsImage.dataset_id == dataset_id)
             ).one_or_none()
 
             if localdata is not None:
                 (article, image) = localdata
+                page["pageid"] = article.post_id
             else:
-                image = DatasetImage(dataset_id=dataset_id, id=page["title"])
-                article = WikimediaCommonsImage(dataset_id=dataset_id, id=page["title"], post_id=page["pageid"])
-                article.base_image = image
+                if page["title"] not in unknown_id_page_ids:
+                    print(f"{page['title']} has no page ID, skipping")
+                    continue
 
+                page["pageid"] = unknown_id_page_ids[page["title"]]
+                article = WikimediaCommonsImage(dataset_id=dataset_id, id=page["title"], post_id=page["pageid"])
+
+                if page["title"].startswith("File:"):
+                    image = DatasetImage(dataset_id=dataset_id, id=page["title"])
+                    article.base_image = image
+                else: #Category or other non-image file that we want to retain anyway
+                    image = None
+                
                 session.add(article)
 
             item = {
@@ -297,7 +393,7 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
                 "article": article,
                 "image": image
             }
-        elif type(page) == tuple: #article/image orm object pair
+        elif type(page) == tuple or type(page) == Row: #article/image orm object pair
             (article, image) = page
 
             item = {
@@ -308,10 +404,10 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
             }
         
         #Next, we need to decide what to scrape.
-        file_already_exists = False
+        file_already_exists = image is None #No image means we don't care to scrape it.
         metadata_already_exists = False
         
-        if image.file is not None:
+        if image is not None and image.file is not None:
             file_already_exists = True
 
             #Check if the image is actually stored or if we just have a bogus
@@ -340,7 +436,7 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
         if article.last_edited is None:
             metadata_already_exists = False
 
-        if image.is_banned:
+        if image is not None and image.is_banned:
             #Skip downloaded files that were banned from the training set.
             #Images can be banned either because they were too large to decode,
             #or because the file could not be decoded in PIL.
@@ -362,6 +458,8 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
         
         item["file_already_exists"] = file_already_exists
         items[item["title"]] = item
+    
+    cats_to_query = set()
     
     if len(titles_to_query) > 0:
         #The actual query. This is done once with the list of things we want to
@@ -388,8 +486,9 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
         for page_id in query_data["query"]["pages"].keys():
             corresponding_title = query_data["query"]["pages"][page_id]["title"]
 
-            if items[corresponding_title]["pageid"] != page_id:
+            if int(page_id) > 0 and items[corresponding_title]["pageid"] != page_id:
                 #Sometimes pages get renumbered, so we need to handle that.
+                #Page ID of -1 means "no page"
                 items[corresponding_title]["pageid"] = page_id
                 items[corresponding_title]["article"].post_id = page_id
 
@@ -433,16 +532,23 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
             if len(all_cats) > 0:
                 metadata["categories"] = all_cats
             
+            for catref in all_cats:
+                cats_to_query.add(catref["title"])
+            
             #TODO: What if MediaWiki just... doesn't give us metadata back?
+            #It turns out that it actually can: pages can be members of
+            #categories that have no corresponding page!
             page_text = conn.parse_tree(corresponding_title)
-            if "parsetree" in page_text["parse"]:
+            if "parse" in page_text and "parsetree" in page_text["parse"]:
                 metadata["parsetree"] = page_text["parse"]["parsetree"]
             
-            metadata["imageinfo"] = query_data["query"]["pages"][page_id]["imageinfo"]
+            if "imageinfo" in query_data["query"]["pages"][page_id]:
+                metadata["imageinfo"] = query_data["query"]["pages"][page_id]["imageinfo"]
             
             items[corresponding_title]["article"].wikidata = metadata
 
-            extract_labels_for_article(session, items[corresponding_title]["article"])
+            if corresponding_title.startswith("File:"):
+                extract_labels_for_article(session, items[corresponding_title]["article"])
 
             titles_returned.append(corresponding_title)
             successful_items.add(corresponding_title)
@@ -482,7 +588,7 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
                 items[corresponding_title]["image"].is_banned = True
             
             successful_items.add(corresponding_title)
-    
+
     return len(successful_items)
 
 def local_wikimedia_base(limit = None, prohibited_categories=[], load_images=True, intended_maximum_size=512):

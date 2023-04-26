@@ -7,7 +7,10 @@ from sqlalchemy.orm import relationship
 BASE_API_ENDPOINT = "https://commons.wikimedia.org/w/api.php"
 
 class WikimediaCommonsImage(Base):
-    """A dataset image extracted from a Wikimedia Commons File: article."""
+    """An article extracted from Wikimedia Commons.
+    
+    If this is also a valid File: article, it will have a base_image containing
+    the extracted image data."""
 
     __tablename__ = "wikimediacommons_image"
     __table_args__ = (
