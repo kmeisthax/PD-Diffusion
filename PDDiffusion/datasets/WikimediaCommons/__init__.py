@@ -330,6 +330,7 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
 
     #If we have bare titles we haven't seen before, we have to ask for the IDs
     unknown_id_titles = []
+    unknown_id_page_ids = {}
     for page in pages:
         if type(page) == str:
             localdata = session.execute(
@@ -340,8 +341,12 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
 
             if localdata is None:
                 unknown_id_titles.append(page)
-    
-    unknown_id_page_ids = {}
+            else:
+                (article, image) = localdata
+                if article.post_id > 0:
+                    unknown_id_page_ids[article.id] = article.page_id
+                else:
+                    unknown_id_titles.append(article.id)
     
     if len(unknown_id_titles) > 0:
         the_ids_query = conn.query_all(titles=unknown_id_titles)
