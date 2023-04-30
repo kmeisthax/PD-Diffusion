@@ -432,6 +432,9 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
             
             if "revisions" in article.wikidata and len(article.wikidata["revisions"]) > 0 and "user" not in article.wikidata["revisions"][0]:
                 metadata_already_exists = False
+            
+            if "hidden_categories" not in article.wikidata:
+                metadata_already_exists = False
         
         if article.last_edited is None:
             metadata_already_exists = False
@@ -542,8 +545,8 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
             if "categories" in hidden_category_data["query"]["pages"][page_id]:
                 all_cats += hidden_category_data["query"]["pages"][page_id]["categories"]
             
-            if len(all_cats) > 0:
-                metadata["categories"] = all_cats
+            metadata["categories"] = all_cats
+            metadata["hidden_categories"] = True
             
             for catref in all_cats:
                 cats_to_query.add(catref["title"])
