@@ -507,6 +507,19 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
                 "title": corresponding_title,
                 "pageid": page_id
             }
+            
+            page_text = conn.parse_tree(corresponding_title)
+            if "parse" in page_text and "parsetree" in page_text["parse"]:
+                metadata["parsetree"] = page_text["parse"]["parsetree"]
+            elif "error" in page_text:
+                print(f"{corresponding_title} Error: {page_text['error']['info']}")
+
+                #Don't import the page, just delete it
+                if page_text["error"]["info"] == "The page you specified doesn't exist.":
+                    titles_returned.append(corresponding_title)
+                    #TODO: Delete when SQLAlchemy won't shit itself
+                    
+                    continue
 
             #Legacy title, probably should be removed.
             metadata["title"] = corresponding_title.removeprefix("File:").removesuffix(".jpg").removesuffix(".jpeg").removesuffix(".png").removesuffix(".tif").removesuffix(".tiff")
@@ -534,13 +547,6 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
             
             for catref in all_cats:
                 cats_to_query.add(catref["title"])
-            
-            #TODO: What if MediaWiki just... doesn't give us metadata back?
-            #It turns out that it actually can: pages can be members of
-            #categories that have no corresponding page!
-            page_text = conn.parse_tree(corresponding_title)
-            if "parse" in page_text and "parsetree" in page_text["parse"]:
-                metadata["parsetree"] = page_text["parse"]["parsetree"]
             
             if "imageinfo" in query_data["query"]["pages"][page_id]:
                 metadata["imageinfo"] = query_data["query"]["pages"][page_id]["imageinfo"]
