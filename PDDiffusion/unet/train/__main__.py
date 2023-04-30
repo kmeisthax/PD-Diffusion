@@ -121,9 +121,9 @@ def train_loop(config):
                         # to provide an extra dimension for the multiple heads
                         # of our cross-attention block. So let's just do both
                         # at the same time.
-                        index = (torch.rand(conditions.shape[0], model.config.attention_head_dim) * conditions.shape[1]) \
+                        index = (torch.rand(conditions.shape[0], 1) * conditions.shape[1]) \
                             .type(torch.int64).unsqueeze(2) \
-                            .repeat(1, 1, conditions.shape[2]) \
+                            .repeat(1, model.config.attention_head_dim, conditions.shape[2]) \
                             .to(conditions.device)
                         conditions = torch.gather(conditions, 1, index)
 
