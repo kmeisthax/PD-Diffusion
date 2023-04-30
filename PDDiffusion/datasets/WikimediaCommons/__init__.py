@@ -344,7 +344,7 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
             else:
                 (article, image) = localdata
                 if article.post_id > 0:
-                    unknown_id_page_ids[article.id] = article.page_id
+                    unknown_id_page_ids[article.id] = article.post_id
                 else:
                     unknown_id_titles.append(article.id)
     
