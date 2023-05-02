@@ -377,11 +377,13 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
                 (article, image) = localdata
                 page["pageid"] = article.post_id
             else:
-                if page["title"] not in unknown_id_page_ids:
-                    print(f"{page['title']} has no page ID, skipping")
-                    continue
+                if "pageid" not in page:
+                    if page["title"] not in unknown_id_page_ids:
+                        print(f"{page['title']} has no page ID, skipping")
+                        continue
 
-                page["pageid"] = unknown_id_page_ids[page["title"]]
+                    page["pageid"] = unknown_id_page_ids[page["title"]]
+                
                 article = WikimediaCommonsImage(dataset_id=dataset_id, id=page["title"], post_id=page["pageid"])
 
                 if page["title"].startswith("File:"):
