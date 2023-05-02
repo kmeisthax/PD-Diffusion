@@ -348,8 +348,16 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
                 else:
                     unknown_id_titles.append(article.id)
     
+    #MediaWiki can arbitrarily decide to 'normalize' page titles, and we have
+    #to look things up on our end if such a thing has happened
+    to_normalized_title = {}
+
     if len(unknown_id_titles) > 0:
         the_ids_query = conn.query_all(titles=unknown_id_titles)
+        if "normalized" in the_ids_query["query"]:
+            for normalization in the_ids_query["query"]["normalized"]:
+                to_normalized_title[normalization["from"]] = normalization["to"]
+
         for page_id in the_ids_query["query"]["pages"].keys():
             corresponding_title = the_ids_query["query"]["pages"][page_id]["title"]
             if int(page_id) >= 0:
@@ -377,6 +385,10 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
                 (article, image) = localdata
                 page["pageid"] = article.post_id
             else:
+                if page["title"] in to_normalized_title:
+                    print(f"Normalized {page['title']} to {to_normalized_title[page['title']]}")
+                    page["title"] = to_normalized_title[page["title"]]
+
                 if "pageid" not in page:
                     if page["title"] not in unknown_id_page_ids:
                         print(f"{page['title']} has no page ID, skipping")
