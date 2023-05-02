@@ -1,5 +1,5 @@
 from PIL import Image
-import os.path
+import os.path, PIL
 
 def image_is_valid(file):
     """Test if an image file on disk loads with PIL."""
