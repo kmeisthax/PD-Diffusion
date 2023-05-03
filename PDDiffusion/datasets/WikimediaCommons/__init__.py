@@ -43,7 +43,7 @@ class Connection(object):
 
         return requests.get(self.base_api_endpoint, params=query_params, headers={'user-agent': self.ua}).json()
     
-    def walk_category(self, category_name, member_types=["page"], recursive = True):
+    def walk_category(self, category_name, member_types=["page"], recursive = True, visitedcats=None):
         """Walk a category on the given wiki API.
         
         Yields member pages or subcategories in the category as returned from
@@ -51,25 +51,37 @@ class Connection(object):
 
         Member types lists all the types you care about.
         
-        In Recursive mode, all subcategories will also be walked."""
+        In Recursive mode, all subcategories will also be walked.
+        
+        `visitedcats` is internal state to prevent visiting the same category
+        repeatedly. It must be populated with a set; any member of the set will
+        be skipped when walking."""
 
         cmcontinue = None
         my_cmtype = set(member_types)
         if recursive:
             #We always need to ask for subcats in a recursive walk.
             my_cmtype.add("subcat")
-
+        
+        if visitedcats is None:
+            visitedcats = set()
+        
         while True:
             page = self.get(action="query", list="categorymembers", cmtitle=category_name, cmlimit=20, cmcontinue=cmcontinue, cmtype="|".join(my_cmtype))
 
             for item in page["query"]["categorymembers"]:
+                if item["title"] in visitedcats:
+                    continue
+
+                visitedcats.add(item["title"])
+
                 if recursive and item["title"].startswith("Category:"):
                     if "subcat" in member_types:
                         #If the user asked for both subcats AND a recursive walk,
                         #we have to yield both the category and its children
                         yield item
                     
-                    yield from self.walk_category(item["title"], member_types=member_types, recursive=recursive)
+                    yield from self.walk_category(item["title"], member_types=member_types, recursive=recursive, visitedcats=visitedcats)
                 else:
                     yield item
             
