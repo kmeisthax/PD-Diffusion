@@ -322,8 +322,9 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
     database connection.
 
     Pages is a list of pages to query. Pages can be provided either as an item
-    dict (w/"title" and "pageid" keys) or a pair of database items
-    (article, image).
+    dict (w/"title" and "pageid" keys), a pair of database items
+    (article, image), or a bare page title string. Pages will be deduplicated
+    by Python equality before use.
     
     If you are scraping from a Mediawiki server, the `walk_category` method of
     `Connection` will provide item dicts for you.
@@ -337,7 +338,7 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
     dataset_id = f"WikimediaCommons:{conn.base_api_endpoint}"
 
     items = {}               #List of pages we need to scrape
-    titles_to_query = []     #List of page titles to put into the metadata query
+    titles_to_query = set()  #List of page titles to put into the metadata query
     successful_items = set() #List of pages that we scraped successfully, for limit counting
 
     #If we have bare titles we haven't seen before, we have to ask for the IDs
@@ -387,6 +388,10 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
         #Then, we need to determine if we've gotten a page title/id pair, or a
         #database item.
         if type(page) == dict: #pageid/title dict
+            if page["title"] in to_normalized_title:
+                print(f"Normalized {page['title']} to {to_normalized_title[page['title']]}")
+                page["title"] = to_normalized_title[page["title"]]
+            
             localdata = session.execute(
                 select(WikimediaCommonsImage, DatasetImage)
                     .outerjoin(DatasetImage, WikimediaCommonsImage.id == DatasetImage.id)
@@ -397,10 +402,6 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
                 (article, image) = localdata
                 page["pageid"] = article.post_id
             else:
-                if page["title"] in to_normalized_title:
-                    print(f"Normalized {page['title']} to {to_normalized_title[page['title']]}")
-                    page["title"] = to_normalized_title[page["title"]]
-
                 if "pageid" not in page:
                     if page["title"] not in unknown_id_page_ids:
                         print(f"{page['title']} has no page ID, skipping")
@@ -488,7 +489,7 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
         print(item["title"])
         
         if not metadata_already_exists:
-            titles_to_query.append(item["title"])
+            titles_to_query.add(item["title"])
         
         item["file_already_exists"] = file_already_exists
         items[item["title"]] = item
@@ -499,7 +500,7 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
         #The actual query. This is done once with the list of things we want to
         #query for fewer HTTP requests
         query_data = conn.query_all(
-            titles=titles_to_query,
+            titles=list(titles_to_query),
             prop=["imageinfo", "revisions", "pageterms", "categories"],
             iiprop=["url", "size"],
             iilimit=100,
@@ -509,12 +510,12 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
         )
 
         hidden_category_data = conn.query_all(
-            titles=titles_to_query,
+            titles=list(titles_to_query),
             prop=["categories"],
             clshow="hidden"
         )
 
-        titles_returned = []
+        titles_returned = set()
         
         #All the pages we query now get copied back into their respective objects.
         for page_id in query_data["query"]["pages"].keys():
@@ -550,7 +551,7 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
 
                 #Don't import the page, just delete it
                 if page_text["error"]["info"] == "The page you specified doesn't exist.":
-                    titles_returned.append(corresponding_title)
+                    titles_returned.add(corresponding_title)
                     #TODO: Delete when SQLAlchemy won't shit itself
                     
                     continue
@@ -590,7 +591,7 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
             if corresponding_title.startswith("File:"):
                 extract_labels_for_article(session, items[corresponding_title]["article"])
 
-            titles_returned.append(corresponding_title)
+            titles_returned.add(corresponding_title)
             successful_items.add(corresponding_title)
         
         #More paranoia: we should always get the same amount of titles in and out
