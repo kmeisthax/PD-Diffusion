@@ -60,11 +60,16 @@ def train_loop(config):
         if progress["last_epoch"] != -1:
             print("Restarting after epoch {}".format(progress["last_epoch"]))
             last_step = len(train_dataloader) * progress["last_epoch"]
+
+        #Calculate how much batch data to toss in order to meet our image limit
+        num_batch_to_skip = len(train_dataloader)
+        if config.image_limit is not None:
+            num_batch_to_skip = min(num_batch_to_skip, math.ceil(config.image_limit / batch_size))
         
         lr_scheduler = get_cosine_schedule_with_warmup(
             optimizer=optimizer,
             num_warmup_steps=config.lr_warmup_steps,
-            num_training_steps=(len(train_dataloader) * config.num_epochs),
+            num_training_steps=num_batch_to_skip * config.num_epochs,
             last_epoch=last_step #Since we step per batch, not per epoch
         )
 
@@ -78,11 +83,6 @@ def train_loop(config):
         )
         
         global_step = 0
-
-        #Calculate how much batch data to toss in order to meet our image limit
-        num_batch_to_skip = len(train_dataloader)
-        if config.image_limit is not None:
-            num_batch_to_skip = min(num_batch_to_skip, math.ceil(config.image_limit / batch_size))
 
         # Now you train the model
         for epoch in range(progress["last_epoch"] + 1, config.num_epochs):
