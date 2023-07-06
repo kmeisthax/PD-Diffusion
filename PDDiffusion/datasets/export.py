@@ -1,12 +1,13 @@
 """SQL to Dataset export"""
 
 from PDDiffusion.datasets.model import DatasetImage, DatasetLabel, File
+from PDDiffusion.datasets.WikimediaCommons.model import WikimediaCommonsImage
 from PDDiffusion.datasets.validity import image_is_valid
 
 from argparse_dataclass import dataclass
 from dataclasses import field
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text, column
 from sqlalchemy.sql import func
 from sqlalchemy.orm import Session
 from PIL import Image
@@ -42,6 +43,7 @@ class ExportOptions:
     rows_per_shard: int = field(default=1000, metadata={"args": ["--rows_per_shard"], "help": "How many images per CSV file"})
     maximum_image_size: int = field(default=512, metadata={"args": ["--maximum_image_size"], "help": "How large the images in the dataset should be"})
     maximum_image_count: int = field(default=None, metadata={"args": ["--image_limit"], "help": "How many images to export in the dataset"})
+    must_have_cats: list = field(default_factory=lambda: [], metadata={"args": ["--with_category"], "help": "Filter exported images to those in the given categories", "nargs": "*", "type": str})
 
 class AsyncShardCloseThread(threading.Thread):
     """Thread that closes out a given shard.
@@ -94,6 +96,35 @@ class AsyncShardCloseThread(threading.Thread):
         
         print(f"Closed out shard {self.id}")
 
+def get_child_cats(session, cats):
+    #TODO: switch to using a dataset-generic table instead of the Wikimedia specific data
+    parent_cats = set()
+    child_cats = set()
+
+    for cat in cats:
+        parent_cats.add(cat)
+
+    if len(parent_cats) > 0:
+        for (child,jtree,parent) in session.execute(
+                select(
+                    WikimediaCommonsImage.id,
+                    func.json_each(text(WikimediaCommonsImage.wikidata.name), "$.categories").table_valued("value"),
+                    func.json_extract(text("value"), "$.title").label("parent_title")
+                ).where(
+                    WikimediaCommonsImage.id.like("Category:%"),
+                    column("parent_title").in_(parent_cats)
+                )
+            ):
+            child_cats.add(child)
+        
+        if len(child_cats) > 0:
+            for grandchild in get_child_cats(session, child_cats):
+                child_cats.add(grandchild)
+        
+        child_cats.update(parent_cats)
+    
+    return child_cats
+
 if __name__ == "__main__":
     options = ExportOptions.parse_args(sys.argv[1:])
     load_dotenv()
@@ -107,6 +138,8 @@ if __name__ == "__main__":
 
     with Session(engine) as session:
         with Pool() as pool:
+            must_have_cats = get_child_cats(session, (options.must_have_cats))
+
             keys = set()
             for (key,) in session.execute(select(DatasetLabel.data_key).group_by(DatasetLabel.data_key)):
                 keys.add(key)
@@ -126,7 +159,17 @@ if __name__ == "__main__":
 
                 encountered_items = []
             
-            for image in session.execute(select(DatasetImage).where(DatasetImage.is_banned == False).order_by(func.random())).scalars().all():
+            query = select(DatasetImage).where(DatasetImage.is_banned == False).order_by(func.random())
+            if len(must_have_cats) > 0:
+                query = query.join_from(DatasetImage, WikimediaCommonsImage)\
+                    .add_columns(
+                        func.json_each(column(WikimediaCommonsImage.wikidata.name), "$.categories").table_valued("value", name="parent_category"),
+                        func.json_extract(text("parent_category.value"), "$.title").label("parent_title")
+                    ).where(
+                        column("parent_title").in_(must_have_cats)
+                    )
+            
+            for image in session.execute(query).scalars().all():
                 if options.maximum_image_count is not None and shard_id * options.rows_per_shard + items_in_shard >= options.maximum_image_count:
                     break
 
