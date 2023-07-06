@@ -7,6 +7,7 @@ from argparse_dataclass import dataclass
 from dataclasses import field
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, select
+from sqlalchemy.sql import func
 from sqlalchemy.orm import Session
 from PIL import Image
 from multiprocessing import Pool, TimeoutError
@@ -40,6 +41,7 @@ class ExportOptions:
     verbose: bool = field(default=False, metadata={"args": ["--verbose"], "help": "Log SQL statements as they execute"})
     rows_per_shard: int = field(default=1000, metadata={"args": ["--rows_per_shard"], "help": "How many images per CSV file"})
     maximum_image_size: int = field(default=512, metadata={"args": ["--maximum_image_size"], "help": "How large the images in the dataset should be"})
+    maximum_image_count: int = field(default=None, metadata={"args": ["--image_limit"], "help": "How many images to export in the dataset"})
 
 class AsyncShardCloseThread(threading.Thread):
     """Thread that closes out a given shard.
@@ -124,7 +126,10 @@ if __name__ == "__main__":
 
                 encountered_items = []
             
-            for image in session.execute(select(DatasetImage).where(DatasetImage.is_banned == False)).scalars().all():
+            for image in session.execute(select(DatasetImage).where(DatasetImage.is_banned == False).order_by(func.random())).scalars().all():
+                if options.maximum_image_count is not None and shard_id * options.rows_per_shard + items_in_shard >= options.maximum_image_count:
+                    break
+
                 if items_in_shard > options.rows_per_shard:
                     close_last_shard()
 
