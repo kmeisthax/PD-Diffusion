@@ -43,7 +43,8 @@ class ExportOptions:
     rows_per_shard: int = field(default=1000, metadata={"args": ["--rows_per_shard"], "help": "How many images per CSV file"})
     maximum_image_size: int = field(default=512, metadata={"args": ["--maximum_image_size"], "help": "How large the images in the dataset should be"})
     maximum_image_count: int = field(default=None, metadata={"args": ["--image_limit"], "help": "How many images to export in the dataset"})
-    must_have_cats: list = field(default_factory=lambda: [], metadata={"args": ["--with_category"], "help": "Filter exported images to those in the given categories", "nargs": "*", "type": str})
+    must_have_cats: list = field(default_factory=lambda: [], metadata={"args": ["--with_category"], "help": "Filter exported images to those in the given categories. Accepts all arguments until --", "nargs": "*", "type": str})
+    exclude_cats: list = field(default_factory=lambda: [], metadata={"args": ["--exclude_category"], "help": "Filter exported images to those NOT in the given categories. Accepts all arguments until --", "nargs": "*", "type": str})
 
 class AsyncShardCloseThread(threading.Thread):
     """Thread that closes out a given shard.
@@ -138,7 +139,8 @@ if __name__ == "__main__":
 
     with Session(engine) as session:
         with Pool() as pool:
-            must_have_cats = get_child_cats(session, (options.must_have_cats))
+            must_have_cats = get_child_cats(session, options.must_have_cats)
+            exclude_cats = get_child_cats(session, options.exclude_cats)
 
             keys = set()
             for (key,) in session.execute(select(DatasetLabel.data_key).group_by(DatasetLabel.data_key)):
@@ -168,6 +170,20 @@ if __name__ == "__main__":
                     ).where(
                         column("parent_title").in_(must_have_cats)
                     )
+            
+            if len(exclude_cats) > 0:
+                subquery = select(
+                        DatasetImage.id,
+                    ).select_from(
+                        func.json_each(column(WikimediaCommonsImage.wikidata.name), "$.categories").table_valued("value", name="parent_category"),
+                    ).join_from(
+                        WikimediaCommonsImage,
+                        DatasetImage
+                    ).where(
+                        func.json_extract(text("parent_category.value"), "$.title").in_(exclude_cats)
+                    )
+                
+                query = query.where(DatasetImage.id.not_in(subquery))
             
             for image in session.execute(query).scalars().all():
                 if options.maximum_image_count is not None and shard_id * options.rows_per_shard + items_in_shard >= options.maximum_image_count:
