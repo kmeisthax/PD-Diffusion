@@ -43,7 +43,7 @@ class Connection(object):
 
         return requests.get(self.base_api_endpoint, params=query_params, headers={'user-agent': self.ua}).json()
     
-    def walk_category(self, category_name, member_types=["page"], recursive = True, visitedcats=None):
+    def walk_category(self, category_name, member_types=["page"], recursive = True, visitedcats=None, depthlimit=None, depth=0):
         """Walk a category on the given wiki API.
         
         Yields member pages or subcategories in the category as returned from
@@ -57,6 +57,9 @@ class Connection(object):
         repeatedly. It must be populated with a set; any member of the set will
         be skipped when walking."""
 
+        if depthlimit is not None and depth >= depthlimit:
+            return
+        
         cmcontinue = None
         my_cmtype = set(member_types)
         if recursive:
@@ -73,7 +76,10 @@ class Connection(object):
                 if item["title"] in visitedcats:
                     continue
 
+                item["depth"] = depth
+
                 visitedcats.add(item["title"])
+                print("".join(["  "] * depth) + item["title"])
 
                 if recursive and item["title"].startswith("Category:"):
                     if "subcat" in member_types:
@@ -81,7 +87,7 @@ class Connection(object):
                         #we have to yield both the category and its children
                         yield item
                     
-                    yield from self.walk_category(item["title"], member_types=member_types, recursive=recursive, visitedcats=visitedcats)
+                    yield from self.walk_category(item["title"], member_types=member_types, recursive=recursive, visitedcats=visitedcats, depthlimit=depthlimit, depth=depth+1)
                 else:
                     yield item
             
@@ -486,7 +492,8 @@ def scrape_and_save_metadata(conn, session, pages=[], force_rescrape=False):
         if file_already_exists and metadata_already_exists:
             continue
 
-        print(item["title"])
+        if not item["title"].startswith("Category:"):
+            print("".join(["  "] * item["depth"]) + item["title"])
         
         if not metadata_already_exists:
             titles_to_query.add(item["title"])

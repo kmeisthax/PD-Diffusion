@@ -19,6 +19,7 @@ class WikimediaScrapeOptions:
     files:bool = field(metadata={"args": ["--files"], "help": "Download files that are children of the given category"}, default=False)
     subcategories:bool = field(metadata={"args": ["--subcategories"], "help": "Store all categories traversed when downloading images. This is also necessary for category exclusion or weighting during dataset export."}, default=False)
     category:str = field(metadata={"args": ["--category"], "help": "Change the starting category to scrape from"}, default=PD_ART_CATEGORY_OLD100)
+    depth_limit:int = field(metadata={"args": ["--depth_limit"], "help": "Maximum category traversal depth"}, default=None)
 
 options = WikimediaScrapeOptions.parse_args(sys.argv[1:])
 
@@ -51,7 +52,7 @@ with Session(engine) as session:
         if options.subcategories:
             member_types.append("subcat")
 
-        source = conn.walk_category(options.category, member_types=member_types)
+        source = conn.walk_category(options.category, member_types=member_types, depthlimit=options.depth_limit)
     
     if options.subcategories:
         count += scrape_and_save_metadata(conn, session, pages=[options.category], force_rescrape=options.rescrape)
